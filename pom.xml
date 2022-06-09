@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <artifactId>addons-parent-pom</artifactId>
+    <groupId>org.exoplatform.addons</groupId>
+    <version>16-M01</version>
+  </parent>
+  <groupId>org.exoplatform.addons.agenda-connectors</groupId>
+  <artifactId>agenda-connectors-parent</artifactId>
+  <version>1.0.x-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>eXo Agenda Connectors - Parent POM</name>
+  <modules>
+    <module>agenda-connectors-api</module>
+    <module>agenda-connectors-services</module>
+    <module>agenda-connectors-webapp</module>
+    <module>agenda-connectors-packaging</module>
+  </modules>
+  <scm>
+    <connection>scm:git:git://github.com/exoplatform/agenda-connectors.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/exoplatform/agenda-connectors.git</developerConnection>
+    <url>https://github.com/exoplatform/agenda-connectors</url>
+    <tag>HEAD</tag>
+  </scm>
+  <properties>
+    <!-- 3rd party libraries versions -->
+    <org.exoplatform.social.version>6.4.x-SNAPSHOT</org.exoplatform.social.version>
+    <org.exoplatform.platform-ui.version>6.4.x-SNAPSHOT</org.exoplatform.platform-ui.version>
+    
+    <!-- Sonar properties -->
+    <sonar.organization>exoplatform</sonar.organization>
+  </properties>
+  <dependencyManagement>
+    <dependencies>
+      <!-- Import versions from platform project -->
+      <dependency>
+        <groupId>org.exoplatform.social</groupId>
+        <artifactId>social</artifactId>
+        <version>${org.exoplatform.social.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <!-- Import versions from platform-ui project -->
+      <dependency>
+        <groupId>org.exoplatform.platform-ui</groupId>
+        <artifactId>platform-ui</artifactId>
+        <version>${org.exoplatform.platform-ui.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Current project artifacts -->
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>agenda-connectors-api</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>agenda-connectors-services</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>agenda-connectors-webapp</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+        <type>war</type>
+      </dependency>
+
+      <dependency>
+        <groupId>${project.groupId}</groupId>
+        <artifactId>agenda-connectors-packaging</artifactId>
+        <version>${project.version}</version>
+        <scope>provided</scope>
+        <type>zip</type>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+  <!-- This profile is used to allow github action to build branches. The github action is used for sonar analysis -->
+  <profiles>
+    <profile>
+      <id>project-repositories</id>
+      <activation>
+        <property>
+          <name>!skip-project-repositories</name>
+        </property>
+      </activation>
+      <repositories>
+        <repository>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+          <id>repository.exoplatform.org</id>
+          <url>https://repository.exoplatform.org/public</url>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+          <id>repository.exoplatform.org</id>
+          <url>https://repository.exoplatform.org/public</url>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+</project>
