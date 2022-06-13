@@ -9,7 +9,7 @@
     the License, or (at your option) any later version.
 
     This software is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    but WITHOUT ANY WARRANTY; without even the implied warqranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
     Lesser General Public License for more details.
 
@@ -30,11 +30,11 @@
             <init-params>
                 <values-param>
                     <name>classpath.resources</name>
-                    <value>locale.notification.MailIntegrationNotification</value>
+                    <value>locale.portlet.AgendaConnectors</value>
                 </values-param>
                 <values-param>
                     <name>portal.resource.names</name>
-                    <value>locale.notification.MailIntegrationNotification</value>
+                    <value>locale.portlet.AgendaConnectors</value>
                 </values-param>
             </init-params>
         </component-plugin>
