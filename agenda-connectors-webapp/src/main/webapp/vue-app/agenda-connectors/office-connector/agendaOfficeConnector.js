@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 export default {
-  name: 'agenda.officeCalendar',
+  name: 'agendaConnectors.officeCalendar',
   avatar: '/agenda/skin/images/office365.png',
   isOauth: true,
   config: {
