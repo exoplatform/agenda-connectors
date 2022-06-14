@@ -2,6 +2,9 @@
   "extends": [
     "eslint-config-meedsio"
   ],
+  "globals": {
+    "gapi": true
+  },
   "rules": {
     "vue/no-mutating-props": "warn",
     "vue/multi-word-component-names": "off"
