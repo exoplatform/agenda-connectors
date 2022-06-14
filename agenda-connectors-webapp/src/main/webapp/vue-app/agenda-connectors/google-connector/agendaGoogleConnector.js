@@ -15,9 +15,9 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 export default {
-  name: 'agendaConnectors.googleCalendar',
-  description: 'agendaConnectors.googleCalendar.description',
-  avatar: '/agenda/skin/images/Google.png',
+  name: 'agenda.googleCalendar',
+  description: 'agenda.googleCalendar.description',
+  avatar: '/agenda-connectors/skin/images/Google.png',
   isOauth: true,
   CLIENT_ID: null,
   DISCOVERY_DOCS: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
