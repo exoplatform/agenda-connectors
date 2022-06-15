@@ -78,7 +78,7 @@
     <external-component-plugins>
         <target-component>org.exoplatform.agenda.service.AgendaRemoteEventService</target-component>
         <component-plugin>
-            <name>Exchange 2016 Remote Connector</name>
+            <name>Exchange Remote Connector</name>
             <set-method>addRemoteProvider</set-method>
             <type>org.exoplatform.agenda.plugin.RemoteProviderDefinitionPlugin</type>
             <init-params>
