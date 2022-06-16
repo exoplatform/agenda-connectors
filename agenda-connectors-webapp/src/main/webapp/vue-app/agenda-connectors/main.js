@@ -16,9 +16,13 @@
  */
 import googleConnector from './google-connector/agendaGoogleConnector.js';
 import officeConnector from './office-connector/agendaOfficeConnector.js';
+import exchangeConnector from './exchange-connector/agendaExchangeConnector.js';
 
 extensionRegistry.registerExtension('agenda', 'connectors', googleConnector);
 extensionRegistry.registerExtension('agenda', 'connectors', officeConnector);
+extensionRegistry.registerExtension('agenda', 'connectors', exchangeConnector);
+
+document.dispatchEvent(new CustomEvent('agenda-connectors-refresh'));
 
 
 // getting language of the PLF
