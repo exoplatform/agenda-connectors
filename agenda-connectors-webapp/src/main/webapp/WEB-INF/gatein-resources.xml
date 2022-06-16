@@ -4,4 +4,18 @@
   xsi:schemaLocation="http://www.exoplatform.org/xml/ns/gatein_resources_1_4 http://www.exoplatform.org/xml/ns/gatein_resources_1_4"
   xmlns="http://www.exoplatform.org/xml/ns/gatein_resources_1_4">
 
+    <module>
+        <name>exchangeConnector</name>
+        <script>
+            <minify>false</minify>
+            <path>/js/agendaConnectors.bundle.js</path>
+        </script>
+        <depends>
+            <module>extensionRegistry</module>
+        </depends>
+        <depends>
+            <module>eXoVueI18n</module>
+        </depends>
+    </module>
+
 </gatein-resources>
