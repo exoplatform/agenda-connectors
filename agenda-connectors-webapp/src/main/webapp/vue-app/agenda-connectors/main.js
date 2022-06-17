@@ -20,6 +20,8 @@ extensionRegistry.registerExtension('agenda', 'connectors', exchangeConnector);
 
 document.dispatchEvent(new CustomEvent('agenda-connectors-refresh'));
 
+document.dispatchEvent(new CustomEvent('displayTopBarLoading'));
+
 
 // getting language of the PLF
 const lang = eXo.env.portal.language || 'en';
@@ -38,3 +40,20 @@ if (extensionRegistry) {
 }
 
 Vue.use(Vuetify);
+const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
+
+const appId = 'ExchangeConnectorApplication';
+
+export function init() {
+  exoi18n.loadLanguageAsync(lang, url).then(i18n => {
+    // init Vue app when locale ressources are ready
+    Vue.createApp({
+      mounted() {
+        document.dispatchEvent(new CustomEvent('hideTopBarLoading'));
+      },
+      template: `<exchange-connector id="${appId}" />`,
+      vuetify,
+      i18n
+    }, `#${appId}`, 'Exchange Connector Settings');
+  });
+}
