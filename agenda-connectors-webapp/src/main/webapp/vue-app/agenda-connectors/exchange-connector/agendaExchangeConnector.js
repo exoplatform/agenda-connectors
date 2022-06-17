@@ -24,4 +24,5 @@ export default {
   initialized: true,
   isSignedIn: false,
   pushing: false,
+  rank: 30
 };
