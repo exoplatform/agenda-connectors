@@ -18,8 +18,6 @@
         <supports>
             <mime-type>text/html</mime-type>
         </supports>
-        <supported-locale>en</supported-locale>
-        <resource-bundle>locale.portlet.AgendaConnectors</resource-bundle>
         <portlet-info>
             <title>Exchange Connector UI</title>
             <keywords>Exchange Connector UI</keywords>
