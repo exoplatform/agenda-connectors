@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
  * Copyright (C) 2022 eXo Platform SAS.
  *
@@ -15,16 +16,17 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 -->
-<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd http://www.exoplatform.org/xml/ns/kernel_1_3.xsd" xmlns="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd">
 
-  <component>
-    <key>org.exoplatform.agendaconnector.service.ExchangeConnectorService</key>
-    <type>org.exoplatform.agendaconnector.service.ExchangeConnectorServiceImpl</type>
-  </component>
-  <component>
-    <type>org.exoplatform.agendaconnector.rest.ExchangeConnectorRest</type>
-  </component>
-  <component>
-    <type>org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage</type>
-  </component>
+<configuration
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd http://www.exoplatform.org/xml/ns/kernel_1_3.xsd"
+        xmlns="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd">
+
+
+  <import>jar:/conf/exo.portal.component.identity-configuration.xml</import>
+  <import>jar:/conf/exo.portal.component.portal-configuration.xml</import>
+  <import>jar:/conf/exo.portal.component.application-registry-configuration.xml</import>
+  <import>jar:/conf/exo.commons.component.core-configuration.xml</import>
+  <import>jar:/conf/exo.social.component.core-configuration.xml</import>
+
 </configuration>
