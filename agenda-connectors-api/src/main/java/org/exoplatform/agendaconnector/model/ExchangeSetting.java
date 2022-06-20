@@ -9,9 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ExchangeSetting {
 
-    private long id;
-
-    private String domaineName;
+    private String domainName;
 
     private String username;
 

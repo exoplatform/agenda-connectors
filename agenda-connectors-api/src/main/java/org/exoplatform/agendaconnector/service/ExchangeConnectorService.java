@@ -20,5 +20,5 @@ public interface ExchangeConnectorService {
      * @param exchangeSetting {@link ExchangeSetting} object to create
      * @return created {@link ExchangeSetting} with generated technical identifier
      */
-    ExchangeSetting createExchangeSetting(ExchangeSetting exchangeSetting);
+    void createExchangeSetting(ExchangeSetting exchangeSetting,long userIdentityId);
 }
