@@ -1,5 +1,6 @@
 package org.exoplatform.agendaconnector.utils;
 
+import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
@@ -13,6 +14,14 @@ import org.exoplatform.web.security.security.TokenServiceInitializationException
 public class ExchangeConnectorUtils {
 
   private static final Log LOG = ExoLogger.getLogger(ExchangeConnectorUtils.class);
+  
+  public static final Scope  EXCHANGE_CONNECTOR_SETTING_SCOPE = Scope.APPLICATION.id("ExchangeAgendaConnector");
+
+  public static final String EXCHANGE_DOMAIN_NAME_KEY         = "ExchangeDomainName";
+
+  public static final String EXCHANGE_USERNAME_KEY            = "ExchangeUsername";
+
+  public static final String EXCHANGE_PASSWORD_KEY            = "ExchangePassword";
 
   private ExchangeConnectorUtils() {
   }
