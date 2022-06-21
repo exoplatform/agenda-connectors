@@ -29,8 +29,21 @@ document.dispatchEvent(new CustomEvent('agenda-connectors-refresh'));
 const lang = eXo.env.portal.language || 'en';
 // init Vue app when locale resources are ready
 const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale.portlet.AgendaConnectors-${lang}.json`;
-// init Vue app when locale resources are ready
-exoi18n.loadLanguageAsync(lang, url).then(i18n => new Vue({i18n}));
+
+const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
+
+const appId = 'AgendaConnectorsApplication';
+
+export function init() {
+  exoi18n.loadLanguageAsync(lang, url).then(i18n => {
+    // init Vue app when locale resources are ready
+    Vue.createApp({
+      template: `<agenda-connectors id="${appId}" />`,
+      vuetify,
+      i18n
+    }, `#${appId}`, 'Agenda Connectors Settings');
+  });
+}
 // get overridden components if exists
 if (extensionRegistry) {
   const components = extensionRegistry.loadComponents('AgendaConnectors');
@@ -40,5 +53,4 @@ if (extensionRegistry) {
     });
   }
 }
-
 Vue.use(Vuetify);
