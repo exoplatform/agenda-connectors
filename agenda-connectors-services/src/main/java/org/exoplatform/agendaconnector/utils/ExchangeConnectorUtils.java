@@ -1,4 +1,4 @@
-package org.exoplatform.agendaconnector.util;
+package org.exoplatform.agendaconnector.utils;
 
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.services.log.ExoLogger;

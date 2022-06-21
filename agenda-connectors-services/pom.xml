@@ -9,7 +9,6 @@
   <name>eXo Agenda Connectors - Services</name>
   <properties>
     <exo.test.coverage.ratio>0</exo.test.coverage.ratio>
-    <com.microsoft.ews.version>2.0</com.microsoft.ews.version>
   </properties>
   <dependencies>
     <dependency>

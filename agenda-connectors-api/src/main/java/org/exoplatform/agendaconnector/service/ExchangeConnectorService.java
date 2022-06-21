@@ -1,6 +1,6 @@
 package org.exoplatform.agendaconnector.service;
 
-import org.exoplatform.agendaconnector.model.ExchangeSetting;
+import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 
 public interface ExchangeConnectorService {
 
@@ -9,5 +9,5 @@ public interface ExchangeConnectorService {
    *
    * @param exchangeUserSetting {@link ExchangeUserSetting} object to create
    */
-  void createExchangeSetting(ExchangeUserSetting exchangeSetting, long userIdentityId);
+  void createExchangeSetting(ExchangeUserSetting exchangeUserSetting, long userIdentityId);
 }

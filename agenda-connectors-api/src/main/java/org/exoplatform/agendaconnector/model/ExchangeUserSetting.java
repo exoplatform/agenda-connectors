@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ExchangeSetting {
+public class ExchangeUserSetting {
 
   private String domainName;
 
