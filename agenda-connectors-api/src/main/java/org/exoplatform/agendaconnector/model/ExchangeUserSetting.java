@@ -9,11 +9,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ExchangeSetting {
 
-    private String domainName;
+  private String domainName;
 
-    private String username;
+  private String username;
 
-    private String password;
+  private String password;
 
 }
-

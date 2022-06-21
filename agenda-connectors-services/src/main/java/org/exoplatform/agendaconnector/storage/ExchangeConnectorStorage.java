@@ -4,9 +4,8 @@ import org.exoplatform.agendaconnector.model.ExchangeSetting;
 
 public class ExchangeConnectorStorage {
 
+  public ExchangeSetting createExchangeSetting(ExchangeSetting exchangeSetting) {
 
-    public ExchangeSetting createExchangeSetting(ExchangeSetting exchangeSetting) {
-
-        return exchangeSetting;
-    }
+    return exchangeSetting;
+  }
 }
