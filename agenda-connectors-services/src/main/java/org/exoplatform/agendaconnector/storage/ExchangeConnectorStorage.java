@@ -16,6 +16,8 @@ public class ExchangeConnectorStorage {
 
   public void createExchangeSetting(ExchangeUserSetting exchangeUserSetting, long userIdentityId) {
 
+    String encodedPassword = ExchangeConnectorUtils.encode(exchangeUserSetting.getPassword());
+
     this.settingService.set(Context.USER.id(String.valueOf(userIdentityId)),
                             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
                             ExchangeConnectorUtils.EXCHANGE_DOMAIN_NAME_KEY,
@@ -27,7 +29,27 @@ public class ExchangeConnectorStorage {
     this.settingService.set(Context.USER.id(String.valueOf(userIdentityId)),
                             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
                             ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY,
-                            SettingValue.create(exchangeUserSetting.getPassword()));
+                            SettingValue.create(encodedPassword));
 
+  }
+
+  public ExchangeUserSetting getExchangeSetting(long userIdentityId){
+
+    SettingValue<?> domainName = this.settingService.get(Context.USER.id(String.valueOf(userIdentityId)),
+            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+            ExchangeConnectorUtils.EXCHANGE_DOMAIN_NAME_KEY);
+    SettingValue<?> username = this.settingService.get(Context.USER.id(String.valueOf(userIdentityId)),
+            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+            ExchangeConnectorUtils.EXCHANGE_USERNAME_KEY);
+    SettingValue<?> password = this.settingService.get(Context.USER.id(String.valueOf(userIdentityId)),
+            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+            ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
+
+    String decodePassword = ExchangeConnectorUtils.decode((String) password.getValue());
+    ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+    exchangeUserSetting.setDomainName((String) domainName.getValue());
+    exchangeUserSetting.setUsername((String) username.getValue());
+    exchangeUserSetting.setPassword(decodePassword);
+    return exchangeUserSetting;
   }
 }

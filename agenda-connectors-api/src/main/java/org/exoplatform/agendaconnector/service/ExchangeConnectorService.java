@@ -10,4 +10,8 @@ public interface ExchangeConnectorService {
    * @param exchangeUserSetting {@link ExchangeUserSetting} object to create
    */
   void createExchangeSetting(ExchangeUserSetting exchangeUserSetting, long userIdentityId);
+
+
+
+  ExchangeUserSetting getExchangeSetting(long userIdentityId);
 }

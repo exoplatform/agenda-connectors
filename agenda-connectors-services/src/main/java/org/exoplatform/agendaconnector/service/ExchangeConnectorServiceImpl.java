@@ -2,7 +2,6 @@ package org.exoplatform.agendaconnector.service;
 
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
-import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 
 
 public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
@@ -21,8 +20,11 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     if (exchangeUserSetting == null) {
       throw new IllegalArgumentException("Exchange user setting is empty");
     }
-    String encodedPassword = ExchangeConnectorUtils.encode(exchangeUserSetting.getPassword());
-    exchangeUserSetting.setPassword(encodedPassword);
     exchangeConnectorStorage.createExchangeSetting(exchangeUserSetting, userIdentityId);
+  }
+
+  @Override
+  public ExchangeUserSetting getExchangeSetting(long userIdentityId) {
+    return exchangeConnectorStorage.getExchangeSetting(userIdentityId);
   }
 }
