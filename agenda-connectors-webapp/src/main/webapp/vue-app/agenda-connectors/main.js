@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+import './initComponents.js';
 import googleConnector from './google-connector/agendaGoogleConnector.js';
 import officeConnector from './office-connector/agendaOfficeConnector.js';
 import exchangeConnector from './exchange-connector/agendaExchangeConnector.js';

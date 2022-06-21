@@ -14,21 +14,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-export default {
-  name: 'agenda.exchangeCalendar',
-  description: 'agenda.exchangeCalendar.description',
-  avatar: '/agenda-connectors/skin/images/MicrosoftExchange.png',
-  isOauth: false,
-  canConnect: true,
-  canPush: false,
-  initialized: true,
-  isSignedIn: false,
-  pushing: false,
-  rank: 30,
-  connect() {
-    document.dispatchEvent(new CustomEvent('open-connector-settings-drawer'));
-  },
-  disconnect() {
-    return Promise.resolve(null);
-  }
+import ExchangeSettingsDrawer from './components/ExchangeSettingsDrawer.vue';
+import AgendaConnectors from './components/AgendaConnectors.vue';
+
+const components = {
+  'exchange-settings-drawer': ExchangeSettingsDrawer,
+  'agenda-connectors': AgendaConnectors,
 };
+
+for (const key in components) {
+  Vue.component(key, components[key]);
+}
