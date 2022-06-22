@@ -23,9 +23,4 @@
       </value-param>
     </init-params>
   </component>
-
-  <component>
-    <key>org.exoplatform.commons.api.settings.SettingService</key>
-    <type>org.exoplatform.settings.impl.SettingServiceImpl</type>
-  </component>
 </configuration>
