@@ -30,7 +30,6 @@ public class ExchangeConnectorStorage {
                             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
                             ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY,
                             SettingValue.create(encodedPassword));
-
   }
 
   public ExchangeUserSetting getExchangeSetting(long userIdentityId){

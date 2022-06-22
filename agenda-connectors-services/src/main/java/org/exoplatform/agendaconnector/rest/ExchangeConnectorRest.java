@@ -1,5 +1,6 @@
 package org.exoplatform.agendaconnector.rest;
 
+import javax.annotation.security.RolesAllowed;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -29,11 +30,11 @@ public class ExchangeConnectorRest implements ResourceContainer {
   public ExchangeConnectorRest(ExchangeConnectorService exchangeConnectorService, IdentityManager identityManager) {
     this.exchangeConnectorService = exchangeConnectorService;
     this.identityManager = identityManager;
-
   }
 
   @POST
   @Consumes(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
   @ApiOperation(value = "Create exchange user setting", httpMethod = "POST", response = Response.class, consumes = "application/json")
   public Response createExchangeSetting(@ApiParam(value = "Exchange user setting object to create", required = true)
   ExchangeUserSetting exchangeUserSetting) {
@@ -49,6 +50,5 @@ public class ExchangeConnectorRest implements ResourceContainer {
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
-
 
 }

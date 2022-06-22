@@ -8,7 +8,7 @@
   <artifactId>agenda-connectors-services</artifactId>
   <name>eXo Agenda Connectors - Services</name>
   <properties>
-    <exo.test.coverage.ratio>0.5</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.3</exo.test.coverage.ratio>
   </properties>
   <dependencies>
     <dependency>

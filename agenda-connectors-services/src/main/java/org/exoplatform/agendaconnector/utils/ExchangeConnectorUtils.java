@@ -5,16 +5,16 @@ import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.security.ConversationState;
+import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
 import org.exoplatform.social.core.manager.IdentityManager;
-import org.exoplatform.social.core.identity.model.Identity;
 import org.exoplatform.web.security.codec.CodecInitializer;
 import org.exoplatform.web.security.security.TokenServiceInitializationException;
 
 public class ExchangeConnectorUtils {
 
-  private static final Log LOG = ExoLogger.getLogger(ExchangeConnectorUtils.class);
-  
+  private static final Log   LOG                              = ExoLogger.getLogger(ExchangeConnectorUtils.class);
+
   public static final Scope  EXCHANGE_CONNECTOR_SETTING_SCOPE = Scope.APPLICATION.id("ExchangeAgendaConnector");
 
   public static final String EXCHANGE_DOMAIN_NAME_KEY         = "ExchangeDomainName";
