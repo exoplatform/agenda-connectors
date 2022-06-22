@@ -1,4 +1,4 @@
-<!--
+/*
  * Copyright (C) 2022 eXo Platform SAS.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -14,17 +14,20 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
--->
-<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd http://www.exoplatform.org/xml/ns/kernel_1_3.xsd" xmlns="http://www.exoplatform.org/xml/ns/kernel_1_3.xsd">
+package org.exoplatform.agendaconnector.model;
 
-  <component>
-    <key>org.exoplatform.agendaconnector.service.ExchangeConnectorService</key>
-    <type>org.exoplatform.agendaconnector.service.ExchangeConnectorServiceImpl</type>
-  </component>
-  <component>
-    <type>org.exoplatform.agendaconnector.rest.ExchangeConnectorRest</type>
-  </component>
-  <component>
-    <type>org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage</type>
-  </component>
-</configuration>
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class ExchangeUserSetting {
+
+  private String domainName;
+
+  private String username;
+
+  private String password;
+}
