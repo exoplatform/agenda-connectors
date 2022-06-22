@@ -38,6 +38,8 @@ public class ExchangeConnectorUtils {
   public static final String EXCHANGE_USERNAME_KEY            = "ExchangeUsername";
 
   public static final String EXCHANGE_PASSWORD_KEY            = "ExchangePassword";
+  
+  public static final String EWS_URL = "/EWS/Exchange.asmx";
 
   private ExchangeConnectorUtils() {
   }

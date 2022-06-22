@@ -66,6 +66,7 @@ public class ExchangeConnectorRest implements ResourceContainer {
     }
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     try {
+      exchangeConnectorService.connectExchangeSetting(exchangeUserSetting);
       exchangeConnectorService.createExchangeSetting(exchangeUserSetting, identityId);
       return Response.ok().build();
     } catch (Exception e) {
