@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+import * as agendaExchangeService from '../js/agendaExchangeService.js';
 export default {
   name: 'agenda.exchangeCalendar',
   description: 'agenda.exchangeCalendar.description',
@@ -40,6 +41,14 @@ export default {
     }
   },
   disconnect() {
-    return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      return agendaExchangeService.deleteExchangeSetting().then((respStatus) => {
+        if (respStatus === 200) {
+          return resolve(null);
+        }
+      }).catch(e => {
+        return reject(e);
+      });
+    });
   }
 };
