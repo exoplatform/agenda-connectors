@@ -35,4 +35,11 @@ public interface ExchangeConnectorService {
    * @return A {@link ExchangeUserSetting} object
    */
   ExchangeUserSetting getExchangeSetting(long userIdentityId);
+  
+  /**
+   * Deletes an exchange user setting
+   *
+   * @param userIdentityId User identity deleting his exchange user setting
+   */
+  void deleteExchangeSetting(long userIdentityId);
 }

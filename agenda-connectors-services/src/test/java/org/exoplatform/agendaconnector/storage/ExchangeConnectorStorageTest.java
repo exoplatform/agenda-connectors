@@ -27,18 +27,50 @@ public class ExchangeConnectorStorageTest extends TestCase {
 
   @Test
   public void testCreateExchangeSetting() {
-
+    //Given
     long userIdentityId = 1;
-    ExchangeUserSetting createdExchangeUserSetting = new ExchangeUserSetting();
-    createdExchangeUserSetting.setDomainName("exoplatform");
-    createdExchangeUserSetting.setUsername("Root");
-    createdExchangeUserSetting.setPassword("Root123");
+    ExchangeUserSetting createdExchangeUserSetting = createExchangeSetting();
+    
+    //When
     exchangeConnectorStorage.createExchangeSetting(createdExchangeUserSetting, userIdentityId);
+    
+    //Then
     ExchangeUserSetting retrievedExchangeUserSetting = exchangeConnectorStorage.getExchangeSetting(userIdentityId);
     assertNotNull(retrievedExchangeUserSetting);
     assertEquals("exoplatform", retrievedExchangeUserSetting.getDomainName());
     assertEquals("Root", retrievedExchangeUserSetting.getUsername());
     assertEquals("Root123", retrievedExchangeUserSetting.getPassword());
+  }
+  
+  @Test
+  public void testDeleteExchangeSetting() {
+    //Given
+    long userIdentityId = 2;
+    ExchangeUserSetting createdExchangeUserSetting = createExchangeSetting();
+    exchangeConnectorStorage.createExchangeSetting(createdExchangeUserSetting, userIdentityId);
+    
+    //Then
+    ExchangeUserSetting retrievedExchangeUserSetting = exchangeConnectorStorage.getExchangeSetting(userIdentityId);
+    assertNotNull(retrievedExchangeUserSetting);
+    assertNotNull(retrievedExchangeUserSetting.getDomainName());
+    
+    //When
+    exchangeConnectorStorage.deleteExchangeSetting(userIdentityId);
+    
+    //Then
+    retrievedExchangeUserSetting = exchangeConnectorStorage.getExchangeSetting(userIdentityId);
+    assertNotNull(retrievedExchangeUserSetting);
+    assertNull(retrievedExchangeUserSetting.getDomainName());
+    assertNull(retrievedExchangeUserSetting.getUsername());
+    assertNull(retrievedExchangeUserSetting.getPassword());
+  }
+  
+  private ExchangeUserSetting createExchangeSetting() {
+    ExchangeUserSetting createdExchangeUserSetting = new ExchangeUserSetting();
+    createdExchangeUserSetting.setDomainName("exoplatform");
+    createdExchangeUserSetting.setUsername("Root");
+    createdExchangeUserSetting.setPassword("Root123");
+    return createdExchangeUserSetting;
   }
 
   private void begin() {
