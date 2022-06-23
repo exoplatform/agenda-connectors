@@ -26,7 +26,17 @@ export default {
   pushing: false,
   rank: 30,
   connect() {
-    document.dispatchEvent(new CustomEvent('open-connector-settings-drawer'));
+    return new Promise((resolve, reject) => {
+      document.dispatchEvent(new CustomEvent('open-connector-settings-drawer'));
+      document.addEventListener('test-connection',(testConnection) => {
+        if (testConnection.detail) {
+          resolve('user connected');
+        }
+        else {
+          reject('connection canceled');
+        }
+      });
+    });
   },
   disconnect() {
     return Promise.resolve(null);

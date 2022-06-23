@@ -20,22 +20,23 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
     ref="exchangeSettingsDrawer"
     body-classes="hide-scroll decrease-z-index-more"
     :right="!$vuetify.rtl"
+    @closed="cancelConnection"
     disable-pull-to-refresh>
     <template slot="title">
-      Connect your Exchange Agenda
+      {{ $t('agenda.exchangeCalendar.settings.connect.drawer.title') }}
     </template>
     <template slot="content">
       <v-form ref="form1" class="pa-2 ms-2 mt-4">
         <div class="d-flex flex-column flex-grow-1">
           <div class="d-flex flex-column mb-2">
-            <label class="d-flex flex-row font-weight-bold my-2">Domain</label>
+            <label class="d-flex flex-row font-weight-bold my-2">{{ $t('agenda.exchangeCalendar.settings.connect.domain.label') }}</label>
             <div class="d-flex flex-row">
               <v-text-field
                 id="domain"
-                :v-model="domain"
+                v-model="domain"
                 type="text"
                 name="domain"
-                placeholder="Domain"
+                :placeholder="$t('agenda.exchangeCalendar.settings.connect.domain.placeholder')"
                 class="input-block-level ignore-vuetify-classes pa-0"
                 required
                 outlined
@@ -43,14 +44,14 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
             </div>
           </div>
           <div class="d-flex flex-column mb-2">
-            <label class="d-flex flex-row font-weight-bold my-2">Account</label>
+            <label class="d-flex flex-row font-weight-bold my-2">{{ $t('agenda.exchangeCalendar.settings.connect.account.label') }}</label>
             <div class="d-flex flex-row">
               <v-text-field
                 v-model="account"
                 type="text"
                 name="account"
                 :error-messages="accountErrorMessage"
-                placeholder="Account"
+                :placeholder="$t('agenda.exchangeCalendar.settings.connect.account.placeholder')"
                 class="input-block-level ignore-vuetify-classes pa-0"
                 outlined
                 required
@@ -58,14 +59,14 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
             </div>
           </div>
           <div class="d-flex flex-column mb-2">
-            <label class="d-flex flex-row font-weight-bold my-2">Password</label>
+            <label class="d-flex flex-row font-weight-bold my-2">{{ $t('agenda.exchangeCalendar.settings.connect.password.label') }}</label>
             <div class="d-flex flex-row">
               <v-text-field
                 v-model="password"
                 :type="toggleFieldType"
                 name="password"
                 :append-icon="displayPasswordIcon"
-                placeholder="Password"
+                :placeholder="$t('agenda.exchangeCalendar.settings.connect.password.placeholder') "
                 maxlength="100"
                 class="input-block-level ignore-vuetify-classes pa-0"
                 required
@@ -82,15 +83,15 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
         <v-spacer />
         <v-btn
           class="btn me-2"
-          @click="close">
-          Cancel
+          @click="cancelConnection">
+          {{ $t('agenda.exchangeCalendar.settings.connect.actions.cancel') }}
         </v-btn>
         <v-btn
           :loading="saving"
-          :disabled="disabled"
+          :disabled="disableConnectButton"
           class="btn btn-primary"
-          @click="checkConnection">
-          Connect
+          @click="saveSettings">
+          {{ $t('agenda.exchangeCalendar.settings.connect.actions.connect') }}
         </v-btn>
       </div>
     </template>
@@ -104,40 +105,37 @@ const MAIL_PATTERN = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+")
 export default {
 
   data: () => ({
-    mailIntegrationSettingId: '',
-    emailAccount: '',
-    imapUrl: '',
-    port: '',
-    encryption: 'SSL',
+    domain: '',
     account: '',
     password: '',
     showPassWord: false,
     connectionSuccess: false,
     saving: false,
     error: '',
-    disabled: false,
-    domain: ''
   }),
   computed: {
     accountRule() {
       return this.account && this.account.toLowerCase().match(MAIL_PATTERN);
     },
     accountErrorMessage() {
-      return this.accountRule || this.account.length === 0 ? '': this.$t('mailIntegration.settings.name.errorMail');
+      return this.accountRule || this.account.length === 0 ? '': this.$t('agenda.exchangeCalendar.settings.connect.account.error');
     },
     displayPasswordIcon() {
       return this.showPassWord ? 'mdi-eye': 'mdi-eye-off';
     },
     toggleFieldType() {
       return this.showPassWord ? 'text': 'password';
+    },
+    disableConnectButton() {
+      return this.domain === '' || this.account === '' || this.password === '' || !this.accountRule;
     }
   },
   watch: {
     saving() {
       if (this.saving) {
-        this.$refs.mailIntegrationSettingDrawer.startLoading();
+        this.$refs.exchangeSettingsDrawer.startLoading();
       } else {
-        this.$refs.mailIntegrationSettingDrawer.endLoading();
+        this.$refs.exchangeSettingsDrawer.endLoading();
       }
     },
   },
@@ -147,6 +145,21 @@ export default {
     },
     closeDrawer() {
       this.$refs.exchangeSettingsDrawer.close();
+    },
+    cancelConnection() {
+      document.dispatchEvent(new CustomEvent('test-connection'));
+      this.closeDrawer();
+    },
+    saveSettings() {
+      if (!this.disableConnectButton) {
+        this.saving = true;
+        window.setTimeout(() => {
+          this.saving = false;
+          this.$emit('display-alert', this.$t('agenda.exchangeCalendar.settings.connection.successMessage'));
+          document.dispatchEvent(new CustomEvent('test-connection', {detail: true}));
+          this.closeDrawer();
+        }, 1000);
+      }
     }
   }
 

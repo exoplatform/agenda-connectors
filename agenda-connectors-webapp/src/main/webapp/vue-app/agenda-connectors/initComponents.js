@@ -16,10 +16,12 @@
  */
 import ExchangeSettingsDrawer from './components/ExchangeSettingsDrawer.vue';
 import AgendaConnectors from './components/AgendaConnectors.vue';
+import AgendaConnectorsAlert from './components/AgendaConnectorsAlert.vue';
 
 const components = {
   'exchange-settings-drawer': ExchangeSettingsDrawer,
   'agenda-connectors': AgendaConnectors,
+  'agenda-connectors-alert': AgendaConnectorsAlert
 };
 
 for (const key in components) {

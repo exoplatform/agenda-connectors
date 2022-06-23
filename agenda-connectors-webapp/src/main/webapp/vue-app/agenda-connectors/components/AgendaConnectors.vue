@@ -1,11 +1,13 @@
 <template>
-  <exchange-settings-drawer ref="exchangeSettingsDrawer" />
+  <v-app>
+    <exchange-settings-drawer ref="exchangeSettingsDrawer" @display-alert="displayAlert" />
+    <agenda-connectors-alert />
+  </v-app>
 </template>
 
 <script>
 
 export default {
-
   created() {
     document.addEventListener('open-connector-settings-drawer',this.openDrawer);
   },
@@ -15,7 +17,13 @@ export default {
     },
     closeDrawer() {
       this.$refs.exchangeSettingsDrawer.closeDrawer();
-    }
+    },
+    displayAlert(message, type) {
+      this.$root.$emit('connectors-connection-alert', {
+        message,
+        type: type || 'success',
+      });
+    },
   }
 };
 </script>
