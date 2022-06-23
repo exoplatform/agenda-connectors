@@ -18,6 +18,7 @@ import './initComponents.js';
 import googleConnector from './google-connector/agendaGoogleConnector.js';
 import officeConnector from './office-connector/agendaOfficeConnector.js';
 import exchangeConnector from './exchange-connector/agendaExchangeConnector.js';
+import * as agendaExchangeService from './js/agendaExchangeService.js';
 
 extensionRegistry.registerExtension('agenda', 'connectors', googleConnector);
 extensionRegistry.registerExtension('agenda', 'connectors', officeConnector);
@@ -25,6 +26,11 @@ extensionRegistry.registerExtension('agenda', 'connectors', exchangeConnector);
 
 document.dispatchEvent(new CustomEvent('agenda-connectors-refresh'));
 
+if (!Vue.prototype.$agendaExchangeService) {
+  window.Object.defineProperty(Vue.prototype, '$agendaExchangeService', {
+    value: agendaExchangeService,
+  });
+}
 
 // getting language of the PLF
 const lang = eXo.env.portal.language || 'en';

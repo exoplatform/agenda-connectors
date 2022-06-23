@@ -153,13 +153,34 @@ export default {
     saveSettings() {
       if (!this.disableConnectButton) {
         this.saving = true;
-        window.setTimeout(() => {
-          this.saving = false;
-          this.$emit('display-alert', this.$t('agenda.exchangeCalendar.settings.connection.successMessage'));
-          document.dispatchEvent(new CustomEvent('test-connection', {detail: true}));
-          this.closeDrawer();
-        }, 1000);
+        const exchangeSettings = {
+          'domainName': this.domain,
+          'username': this.account,
+          'password': this.password
+        };
+        this.$agendaExchangeService.createExchangeSetting(exchangeSettings).then((respStatus) => {
+          if (respStatus === 200) {
+            this.$emit('display-alert', this.$t('agenda.exchangeCalendar.settings.connection.successMessage'));
+          }
+        }).then(() => {
+          this.$agendaExchangeService.getExchangeSetting().then((settings) => {
+            document.dispatchEvent(new CustomEvent('test-connection', {detail: settings}));
+            this.reset();
+            this.closeDrawer();
+          });
+        }).catch(() => {
+          this.$emit('display-alert', this.$t('agenda.exchangeCalendar.settings.connection.errorMessage'), 'error');
+        }).finally(() => {
+          window.setTimeout(() => {
+            this.saving = false;
+          }, 200);
+        });
       }
+    },
+    reset() {
+      this.domain = '';
+      this.account ='';
+      this.password = '';
     }
   }
 

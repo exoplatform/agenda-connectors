@@ -22,21 +22,22 @@ export default {
   canConnect: true,
   canPush: false,
   initialized: true,
-  isSignedIn: false,
+  isSignedIn: true,
   pushing: false,
   rank: 30,
-  connect() {
-    return new Promise((resolve, reject) => {
-      document.dispatchEvent(new CustomEvent('open-connector-settings-drawer'));
-      document.addEventListener('test-connection',(testConnection) => {
-        if (testConnection.detail) {
-          resolve('user connected');
-        }
-        else {
-          reject('connection canceled');
-        }
+  connect(askWriteAccess) {
+    if (askWriteAccess) {
+      return new Promise((resolve, reject) => {
+        document.dispatchEvent(new CustomEvent('open-connector-settings-drawer'));
+        document.addEventListener('test-connection', (settings) => {
+          if (settings.detail) {
+            resolve(settings.detail.username);
+          } else {
+            reject('connection canceled');
+          }
+        });
       });
-    });
+    }
   },
   disconnect() {
     return Promise.resolve(null);
