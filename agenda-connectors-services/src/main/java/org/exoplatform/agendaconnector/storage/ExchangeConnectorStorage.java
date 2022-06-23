@@ -48,7 +48,7 @@ public class ExchangeConnectorStorage {
                             SettingValue.create(encodedPassword));
   }
 
-  public ExchangeUserSetting getExchangeSetting(long userIdentityId){
+  public ExchangeUserSetting getExchangeSetting(long userIdentityId) {
 
     SettingValue<?> domainName = this.settingService.get(Context.USER.id(String.valueOf(userIdentityId)),
             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
@@ -60,11 +60,30 @@ public class ExchangeConnectorStorage {
             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
             ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
 
-    String decodePassword = ExchangeConnectorUtils.decode((String) password.getValue());
     ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
-    exchangeUserSetting.setDomainName((String) domainName.getValue());
-    exchangeUserSetting.setUsername((String) username.getValue());
-    exchangeUserSetting.setPassword(decodePassword);
+    if (domainName != null) {
+      exchangeUserSetting.setDomainName((String) domainName.getValue());
+    }
+    if (username != null) {
+      exchangeUserSetting.setUsername((String) username.getValue());
+    }
+    if (username != null) {
+      String decodePassword = ExchangeConnectorUtils.decode((String) password.getValue());
+      exchangeUserSetting.setPassword(decodePassword);
+    }
     return exchangeUserSetting;
+  }
+  
+  public void deleteExchangeSetting(long userIdentityId) {
+
+    this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
+            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+            ExchangeConnectorUtils.EXCHANGE_DOMAIN_NAME_KEY);
+    this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
+            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+            ExchangeConnectorUtils.EXCHANGE_USERNAME_KEY);
+    this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
+                               ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+                               ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
   }
 }

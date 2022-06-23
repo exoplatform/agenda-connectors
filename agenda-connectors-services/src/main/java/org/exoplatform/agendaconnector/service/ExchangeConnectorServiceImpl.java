@@ -43,4 +43,9 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
   public ExchangeUserSetting getExchangeSetting(long userIdentityId) {
     return exchangeConnectorStorage.getExchangeSetting(userIdentityId);
   }
+  
+  @Override
+  public void deleteExchangeSetting(long userIdentityId) {
+    exchangeConnectorStorage.deleteExchangeSetting(userIdentityId);
+  }
 }
