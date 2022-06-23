@@ -40,7 +40,6 @@ public interface ExchangeConnectorService {
    * Deletes an exchange user setting
    *
    * @param userIdentityId User identity deleting his exchange user setting
-   * @throws IllegalAccessException when the user is not authorized to delete exchange user setting
    */
   void deleteExchangeSetting(long userIdentityId);
 }
