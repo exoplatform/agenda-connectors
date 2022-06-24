@@ -16,11 +16,16 @@
  */
 package org.exoplatform.agendaconnector.storage;
 
+import org.exoplatform.agenda.entity.EventEntity;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
+import org.exoplatform.webui.event.Event;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class ExchangeConnectorStorage {
 
@@ -85,5 +90,10 @@ public class ExchangeConnectorStorage {
     this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
                                ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
                                ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
+  }
+
+  public static List<EventEntity> getEvents(){
+    List<EventEntity> events = new ArrayList<>();
+    return events;
   }
 }

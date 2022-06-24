@@ -21,9 +21,14 @@ import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+import org.apache.commons.lang3.StringUtils;
+import org.exoplatform.agenda.entity.EventEntity;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.service.ExchangeConnectorService;
 import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
+import org.exoplatform.common.http.HTTPStatus;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 import org.exoplatform.services.rest.resource.ResourceContainer;
@@ -31,6 +36,10 @@ import org.exoplatform.social.core.manager.IdentityManager;
 
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.*;
 
 @Path("/v1/exchange")
 public class ExchangeConnectorRest implements ResourceContainer {
@@ -91,6 +100,52 @@ public class ExchangeConnectorRest implements ResourceContainer {
       LOG.error("Error when deleting exchange user setting ", e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
+  }
+
+  @GET
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @ApiOperation(
+          value = "Retrieves the list of events available for an owner of type user or space, identitifed by its identity technical identifier."
+                  + " If no designated owner, all events available for authenticated user will be retrieved.",
+          httpMethod = "GET",
+          response = Response.class,
+          produces = "application/json"
+  )
+  @ApiResponses(
+          value = {
+                  @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+                  @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+                  @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"),
+          }
+  )
+  public Response getEvents(
+
+          @ApiParam(value = "Start datetime using RFC-3339 representation", required = true)
+          @QueryParam(
+                  "start"
+          )
+          String start,
+          @ApiParam(value = "End datetime using RFC-3339 representation", required = false)
+          @QueryParam(
+                  "end"
+          )
+          String end,
+          @ApiParam(value = "IANA Time zone identitifer", required = false)
+          @QueryParam(
+                  "timeZoneId"
+          )
+          String timeZoneId) {
+
+    if (StringUtils.isBlank(start)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Start datetime is mandatory").build();
+    }
+    if (StringUtils.isBlank(timeZoneId)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Time zone is mandatory").build();
+    }
+    ZoneId userTimeZone = StringUtils.isBlank(timeZoneId) ? ZoneOffset.UTC : ZoneId.of(timeZoneId);
+    List<Event> eventList = exchangeConnectorService.getEvents();
+    return Response.ok(eventList).build();
   }
 
 }
