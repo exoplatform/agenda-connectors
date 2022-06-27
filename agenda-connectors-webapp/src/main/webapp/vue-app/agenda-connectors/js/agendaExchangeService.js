@@ -56,3 +56,16 @@ export const deleteExchangeSetting = () => {
     }
   });
 };
+
+export const getExchangeEvents = (start, end) => {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/events?start="test"${start}&end=${end}&timeZoneId=Africa/Tunis`, {
+    credentials: 'include',
+    method: 'GET',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp.json();
+    }
+  });
+};

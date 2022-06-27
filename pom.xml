@@ -34,15 +34,6 @@
   </properties>
   <dependencyManagement>
     <dependencies>
-
-      <dependency>
-        <groupId>org.exoplatform.agenda</groupId>
-        <artifactId>agenda-api</artifactId>
-      </dependency>
-      <dependency>
-        <groupId>org.exoplatform.agenda</groupId>
-        <artifactId>agenda-services</artifactId>
-      </dependency>
       <!-- Import versions from platform project -->
       <dependency>
         <groupId>org.exoplatform.social</groupId>

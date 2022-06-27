@@ -16,9 +16,8 @@
  */
 package org.exoplatform.agendaconnector.service;
 
-import org.exoplatform.agenda.entity.EventEntity;
+import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
-import org.exoplatform.webui.event.Event;
 
 import java.util.List;
 
@@ -47,5 +46,5 @@ public interface ExchangeConnectorService {
    */
   void deleteExchangeSetting(long userIdentityId);
 
-  List<EventEntity> getEvents();
+  List<EventEntity> getEvents(String start, String end);
 }
