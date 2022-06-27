@@ -19,6 +19,8 @@ package org.exoplatform.agendaconnector.service;
 import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
+
+import java.time.ZoneId;
 import java.util.List;
 
 
@@ -52,7 +54,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
   }
 
   @Override
-   public List<EventEntity> getEvents(String start, String end) {
-    return ExchangeConnectorStorage.getEvents(start, end);
+   public List<EventEntity> getEvents(ZoneId userTimeZone) {
+    return ExchangeConnectorStorage.getEvents(userTimeZone);
   }
 }

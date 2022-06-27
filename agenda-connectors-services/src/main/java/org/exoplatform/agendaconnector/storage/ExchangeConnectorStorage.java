@@ -22,7 +22,7 @@ import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
-
+import org.exoplatform.agenda.util.AgendaDateUtils;
 import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -92,24 +92,24 @@ public class ExchangeConnectorStorage {
                                ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
   }
 
-  public static List<EventEntity> getEvents(String start,String end){
-    ZonedDateTime startDate = ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), ZoneOffset.UTC).withZoneSameInstant(ZoneId.systemDefault());
-    ZonedDateTime endDate = startDate.plusDays(1);
-    start = startDate.toString();
-    end = endDate.toString();
+  public static List<EventEntity>  getEvents(ZoneId userTimeZone){
+    ZonedDateTime startDate = ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), userTimeZone).withZoneSameInstant(ZoneId.systemDefault());
+    ZonedDateTime endDate = startDate.plusHours(1);
+    String startDateEvent = AgendaDateUtils.toRFC3339Date(startDate);
+    String endDateEvent = AgendaDateUtils.toRFC3339Date(endDate);
     List<EventEntity> events = new ArrayList<>();
     EventEntity event11 = new EventEntity();
-    long id1= 2;
-    long id2= 3;
+    long id1= 10;
+    long id2= 11;
     event11.setId(id1);
     event11.setSummary("event11");
-    event11.setStart(start);
-    event11.setEnd(end);
+    event11.setStart(startDateEvent);
+    event11.setEnd(endDateEvent);
     EventEntity event22 = new EventEntity();
     event22.setId(id2);
     event22.setSummary("event22");
-    event22.setStart(start);
-    event22.setEnd(end);
+    event22.setStart(startDateEvent);
+    event22.setEnd(endDateEvent);
     events.add(event11);
     events.add(event22);
     return events;

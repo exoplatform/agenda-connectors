@@ -58,7 +58,7 @@ export const deleteExchangeSetting = () => {
 };
 
 export const getExchangeEvents = (start, end) => {
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/events?start="test"${start}&end=${end}&timeZoneId=Africa/Tunis`, {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/events?start=${start}&end=${end}&timeZoneId=Africa/Tunis`, {
     credentials: 'include',
     method: 'GET',
   }).then(resp => {

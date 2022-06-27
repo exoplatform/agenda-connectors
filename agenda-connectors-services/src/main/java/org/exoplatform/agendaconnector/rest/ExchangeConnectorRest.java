@@ -25,7 +25,6 @@ import io.swagger.annotations.ApiResponse;
 import io.swagger.annotations.ApiResponses;
 import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.agenda.rest.model.EventEntity;
-import org.exoplatform.agenda.rest.model.EventList;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.service.ExchangeConnectorService;
 import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
@@ -108,8 +107,7 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(
-          value = "Retrieves the list of events available for an owner of type user or space, identitifed by its identity technical identifier."
-                  + " If no designated owner, all events available for authenticated user will be retrieved.",
+          value = "Retrieves the remote events list of Exchange Connector",
           httpMethod = "GET",
           response = Response.class,
           produces = "application/json"
@@ -146,12 +144,9 @@ public class ExchangeConnectorRest implements ResourceContainer {
       return Response.status(Response.Status.BAD_REQUEST).entity("Time zone is mandatory").build();
     }
     ZoneId userTimeZone = StringUtils.isBlank(timeZoneId) ? ZoneOffset.UTC : ZoneId.of(timeZoneId);
-    List<EventEntity> events = exchangeConnectorService.getEvents(start, end);
-    EventList eventList = new EventList();
-    eventList.setEvents(events);
-    eventList.setStart(start);
-    eventList.setEnd(end);
-    return Response.ok(eventList).build();
+    List<EventEntity> events = exchangeConnectorService.getEvents(userTimeZone);
+
+    return Response.ok(events).build();
   }
 
 }
