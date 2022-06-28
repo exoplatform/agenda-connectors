@@ -106,36 +106,20 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Path("/events")
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @ApiOperation(
-          value = "Retrieves the remote events list of Exchange Connector",
-          httpMethod = "GET",
-          response = Response.class,
-          produces = "application/json"
-  )
-  @ApiResponses(
-          value = {
-                  @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-                  @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
-                  @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"),
-          }
-  )
+  @ApiOperation(value = "Retrieves the remote events list of Exchange Connector", httpMethod = "GET", response = Response.class, produces = "application/json")
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
   public Response getEvents(
-
-          @ApiParam(value = "Start datetime using RFC-3339 representation", required = true)
-          @QueryParam(
-                  "start"
-          )
-          String start,
-          @ApiParam(value = "End datetime using RFC-3339 representation", required = false)
-          @QueryParam(
-                  "end"
-          )
-          String end,
-          @ApiParam(value = "IANA Time zone identitifer", required = false)
-          @QueryParam(
-                  "timeZoneId"
-          )
-          String timeZoneId) {
+                            @ApiParam(value = "Start datetime using RFC-3339 representation", required = true)
+                            @QueryParam("start")
+                            String start,
+                            @ApiParam(value = "End datetime using RFC-3339 representation", required = false)
+                            @QueryParam("end")
+                            String end,
+                            @ApiParam(value = "IANA Time zone identitifer", required = false)
+                            @QueryParam("timeZoneId")
+                            String timeZoneId) {
 
     if (StringUtils.isBlank(start)) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Start datetime is mandatory").build();
