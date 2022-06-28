@@ -128,7 +128,7 @@ public class ExchangeConnectorRest implements ResourceContainer {
       return Response.status(Response.Status.BAD_REQUEST).entity("Time zone is mandatory").build();
     }
     ZoneId userTimeZone = StringUtils.isBlank(timeZoneId) ? ZoneOffset.UTC : ZoneId.of(timeZoneId);
-    List<EventEntity> events = exchangeConnectorService.getEvents(userTimeZone);
+    List<EventEntity> events = exchangeConnectorService.getEvents(start, end, userTimeZone);
 
     return Response.ok(events).build();
   }

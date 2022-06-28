@@ -54,7 +54,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
   }
 
   @Override
-   public List<EventEntity> getEvents(ZoneId userTimeZone) {
-    return ExchangeConnectorStorage.getEvents(userTimeZone);
+   public List<EventEntity> getEvents(String start, String end, ZoneId userTimeZone) {
+    return ExchangeConnectorStorage.getEvents(start, end, userTimeZone);
   }
 }

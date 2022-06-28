@@ -53,5 +53,5 @@ public interface ExchangeConnectorService {
    * @param userTimeZone User time zone
    * @return {@link List} of {@link EventEntity}
    */
-  List<EventEntity> getEvents(ZoneId userTimeZone);
+  List<EventEntity> getEvents(String start, String end, ZoneId userTimeZone);
 }
