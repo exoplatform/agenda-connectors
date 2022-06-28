@@ -28,7 +28,7 @@
     <!-- 3rd party libraries versions -->
     <org.exoplatform.social.version>6.4.x-marketfit-SNAPSHOT</org.exoplatform.social.version>
     <org.exoplatform.platform-ui.version>6.4.x-marketfit-SNAPSHOT</org.exoplatform.platform-ui.version>
-    
+    <org.exoplatform.agenda.version>1.3.x-marketfit-SNAPSHOT</org.exoplatform.agenda.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
   </properties>
@@ -47,6 +47,14 @@
         <groupId>org.exoplatform.platform-ui</groupId>
         <artifactId>platform-ui</artifactId>
         <version>${org.exoplatform.platform-ui.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+	  <!-- Import versions from platform-ui project -->
+      <dependency>
+        <groupId>org.exoplatform.agenda</groupId>
+        <artifactId>agenda-parent</artifactId>
+        <version>${org.exoplatform.agenda.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

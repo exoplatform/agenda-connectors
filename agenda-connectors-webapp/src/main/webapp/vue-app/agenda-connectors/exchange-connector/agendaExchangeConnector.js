@@ -50,5 +50,9 @@ export default {
         return reject(e);
       });
     });
+  },
+
+  getEvents(periodStartDate, periodEndDate){
+    return agendaExchangeService.getExchangeEvents(periodStartDate, periodEndDate); 
   }
 };
