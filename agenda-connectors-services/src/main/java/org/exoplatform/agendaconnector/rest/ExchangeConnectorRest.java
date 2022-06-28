@@ -108,7 +108,7 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @RolesAllowed("users")
   @ApiOperation(value = "Retrieves the remote events list of Exchange Connector", httpMethod = "GET", response = Response.class, produces = "application/json")
   @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
       @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
   public Response getEvents(
                             @ApiParam(value = "Start datetime using RFC-3339 representation", required = true)

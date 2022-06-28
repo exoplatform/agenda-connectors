@@ -92,7 +92,7 @@ public class ExchangeConnectorStorage {
                                ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
   }
 
-  public static List<EventEntity>  getEvents(String start, String end ,ZoneId userTimeZone){
+  public static List<EventEntity> getEvents(String start, String end,ZoneId userTimeZone){
 
     ZonedDateTime startDate1 = ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), userTimeZone).withZoneSameInstant(ZoneId.systemDefault());
     ZonedDateTime startDate2 = startDate1.plusDays(1);
