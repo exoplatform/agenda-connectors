@@ -17,10 +17,7 @@
 package org.exoplatform.agendaconnector.rest;
 
 import javax.annotation.security.RolesAllowed;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
@@ -67,7 +64,21 @@ public class ExchangeConnectorRest implements ResourceContainer {
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
-  
+
+  @GET
+  @RolesAllowed("users")
+  @Produces(MediaType.APPLICATION_JSON)
+  @ApiOperation(value = "Get exchange user setting", httpMethod = "GET", response = Response.class, produces = "application/json")
+  public Response getExchangeSetting() {
+    long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      return Response.ok(exchangeConnectorService. getExchangeSetting(identityId)).build();
+    } catch (Exception e) {
+      LOG.warn("Error retrieving exchange user settings for user with id '{}'", identityId, e);
+      return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
   @DELETE
   @RolesAllowed("users")
   @ApiOperation(value = "Delete exchange user setting", httpMethod = "DELETE", response = Response.class)

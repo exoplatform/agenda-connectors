@@ -14,12 +14,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+import './initComponents.js';
 import exchangeConnector from './exchange-connector/agendaExchangeConnector.js';
+import * as agendaExchangeService from './js/agendaExchangeService.js';
 
 extensionRegistry.registerExtension('agenda', 'connectors', exchangeConnector);
 
 document.dispatchEvent(new CustomEvent('agenda-connectors-refresh'));
 
+if (!Vue.prototype.$agendaExchangeService) {
+  window.Object.defineProperty(Vue.prototype, '$agendaExchangeService', {
+    value: agendaExchangeService,
+  });
+}
 
 // getting language of the PLF
 const lang = eXo.env.portal.language || 'en';

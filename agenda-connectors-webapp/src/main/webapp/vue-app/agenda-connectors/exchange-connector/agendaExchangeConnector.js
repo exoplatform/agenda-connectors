@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+import * as agendaExchangeService from '../js/agendaExchangeService.js';
 export default {
   name: 'agenda.exchangeCalendar',
   description: 'agenda.exchangeCalendar.description',
@@ -22,7 +23,32 @@ export default {
   canConnect: true,
   canPush: false,
   initialized: true,
-  isSignedIn: false,
+  isSignedIn: true,
   pushing: false,
-  rank: 30
+  rank: 30,
+  connect(askWriteAccess) {
+    if (askWriteAccess) {
+      return new Promise((resolve, reject) => {
+        document.dispatchEvent(new CustomEvent('open-connector-settings-drawer'));
+        document.addEventListener('test-connection', (settings) => {
+          if (settings.detail) {
+            resolve(settings.detail.username);
+          } else {
+            reject('connection canceled');
+          }
+        });
+      });
+    }
+  },
+  disconnect() {
+    return new Promise((resolve, reject) => {
+      return agendaExchangeService.deleteExchangeSetting().then((respStatus) => {
+        if (respStatus === 200) {
+          return resolve(null);
+        }
+      }).catch(e => {
+        return reject(e);
+      });
+    });
+  }
 };
