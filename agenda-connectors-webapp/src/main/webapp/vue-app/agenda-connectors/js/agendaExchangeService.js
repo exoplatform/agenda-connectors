@@ -14,6 +14,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+export const USER_TIMEZONE_ID = new window.Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 export const createExchangeSetting = (exchangeSettings) => {
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange`, {
     headers: {
@@ -53,6 +55,19 @@ export const deleteExchangeSetting = () => {
       throw new Error('Response code indicates a server error', resp);
     } else {
       return resp.status;
+    }
+  });
+};
+
+export const getExchangeEvents = (start, end) => {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/events?start=${start}&end=${end}&timeZoneId=${USER_TIMEZONE_ID}`, {
+    credentials: 'include',
+    method: 'GET',
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp.json();
     }
   });
 };

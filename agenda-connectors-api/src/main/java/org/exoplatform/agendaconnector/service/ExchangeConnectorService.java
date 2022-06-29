@@ -16,7 +16,11 @@
  */
 package org.exoplatform.agendaconnector.service;
 
+import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
+
+import java.time.ZoneId;
+import java.util.List;
 
 public interface ExchangeConnectorService {
 
@@ -42,4 +46,12 @@ public interface ExchangeConnectorService {
    * @param userIdentityId User identity deleting his exchange user setting
    */
   void deleteExchangeSetting(long userIdentityId);
+
+  /**
+   * Retrieves list of remote events from Exchange connector.
+   *
+   * @param userTimeZone User time zone
+   * @return {@link List} of {@link EventEntity}
+   */
+  List<EventEntity> getEvents(String start, String end, ZoneId userTimeZone);
 }
