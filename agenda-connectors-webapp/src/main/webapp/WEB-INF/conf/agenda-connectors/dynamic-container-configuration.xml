@@ -23,45 +23,45 @@
       <type>org.exoplatform.commons.addons.AddOnPluginImpl</type>
       <description></description>
       <init-params>
-          <value-param>
-              <name>priority</name>
-              <value>5</value>
-          </value-param>
-          <value-param>
-              <name>containerName</name>
-              <value>bottom-all-container</value>
-          </value-param>
-          <object-param>
-              <name>agenda-connectors-portlet</name>
-              <description></description>
-              <object type="org.exoplatform.commons.addons.PortletModel">
-                  <field name="contentId">
-                      <string>agenda-connectors/AgendaConnectors</string>
-                  </field>
-                  <field name="permissions">
-                      <collection type="java.util.ArrayList">
-                          <value>
-                              <string>*:/platform/users</string>
-                          </value>
-                          <value>
-                              <string>*:/platform/externals</string>
-                          </value>
-                      </collection>
-                  </field>
-                  <field name="title">
-                      <string>>Agenda Connectors Portlet</string>
-                  </field>
-                  <field name="showInfoBar">
-                      <boolean>false</boolean>
-                  </field>
-                  <field name="showApplicationState">
-                      <boolean>false</boolean>
-                  </field>
-                  <field name="showApplicationMode">
-                      <boolean>false</boolean>
-                  </field>
-              </object>
-          </object-param>
+        <value-param>
+          <name>priority</name>
+          <value>5</value>
+        </value-param>
+        <value-param>
+          <name>containerName</name>
+          <value>bottom-all-container</value>
+        </value-param>
+        <object-param>
+          <name>agenda-connectors-portlet</name>
+          <description></description>
+          <object type="org.exoplatform.commons.addons.PortletModel">
+            <field name="contentId">
+              <string>agenda-connectors/AgendaConnectors</string>
+            </field>
+            <field name="permissions">
+              <collection type="java.util.ArrayList">
+                <value>
+                  <string>*:/platform/users</string>
+                </value>
+                <value>
+                  <string>*:/platform/externals</string>
+                </value>
+              </collection>
+            </field>
+            <field name="title">
+              <string>>Agenda Connectors Portlet</string>
+            </field>
+            <field name="showInfoBar">
+              <boolean>false</boolean>
+            </field>
+            <field name="showApplicationState">
+              <boolean>false</boolean>
+            </field>
+            <field name="showApplicationMode">
+              <boolean>false</boolean>
+            </field>
+          </object>
+        </object-param>
       </init-params>
     </component-plugin>
   </external-component-plugins>
