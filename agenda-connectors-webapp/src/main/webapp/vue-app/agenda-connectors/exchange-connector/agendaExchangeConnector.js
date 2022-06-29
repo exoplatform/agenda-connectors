@@ -53,6 +53,13 @@ export default {
   },
 
   getEvents(periodStartDate, periodEndDate){
-    return agendaExchangeService.getExchangeEvents(periodStartDate, periodEndDate); 
+    return agendaExchangeService.getExchangeEvents(periodStartDate, periodEndDate)
+      .then(events => {
+        events.forEach(event => {
+          event.type = 'remoteEvent';
+          event.color = '#FFFFFF';
+        });
+        return events;
+      });
   }
 };
