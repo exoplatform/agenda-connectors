@@ -8,7 +8,8 @@
   <artifactId>agenda-connectors-services</artifactId>
   <name>eXo Agenda Connectors - Services</name>
   <properties>
-    <exo.test.coverage.ratio>0.3</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.2</exo.test.coverage.ratio>
+    <com.microsoft.ews.version>2.0</com.microsoft.ews.version>
   </properties>
   <dependencies>
     <dependency>
@@ -29,6 +30,12 @@
     <dependency>
       <groupId>org.exoplatform.social</groupId>
       <artifactId>social-component-core</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.microsoft.ews-java-api</groupId>
+      <artifactId>ews-java-api</artifactId>
+      <version>${com.microsoft.ews.version}</version>
       <scope>provided</scope>
     </dependency>
     <!-- Test -->
