@@ -50,7 +50,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
                 v-model="account"
                 type="text"
                 name="account"
-                :error-messages="accountErrorMessage"
                 :placeholder="$t('agenda.exchangeCalendar.settings.connect.account.placeholder')"
                 class="input-block-level ignore-vuetify-classes pa-0"
                 outlined
@@ -117,9 +116,6 @@ export default {
     accountRule() {
       return this.account && this.account.toLowerCase().match(MAIL_PATTERN);
     },
-    accountErrorMessage() {
-      return this.accountRule || this.account.length === 0 ? '': this.$t('agenda.exchangeCalendar.settings.connect.account.error');
-    },
     displayPasswordIcon() {
       return this.showPassWord ? 'mdi-eye': 'mdi-eye-off';
     },
@@ -127,7 +123,7 @@ export default {
       return this.showPassWord ? 'text': 'password';
     },
     disableConnectButton() {
-      return this.domain === '' || this.account === '' || this.password === '' || !this.accountRule;
+      return this.account === '' || this.password === '';
     }
   },
   watch: {
