@@ -74,77 +74,82 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
   @Override
   public void connectExchangeSetting(ExchangeUserSetting exchangeUserSetting) throws IllegalAccessException {
     try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
-      exchangeService.setTimeout(300000);
-      String exchangeDomain = exchangeUserSetting.getDomainName();
-      String exchangeUsername = exchangeUserSetting.getUsername();
-      String exchangePassword = exchangeUserSetting.getPassword();
-      String exchangeServerURL = System.getProperty("exo.exchange.server.url");
-      ExchangeCredentials credentials = null;
-      if (exchangeDomain != null) {
-        credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
-      } else {
-        credentials = new WebCredentials(exchangeUsername, exchangePassword);
-      }
-      exchangeService.setCredentials(credentials);
-      exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
-      exchangeService.getInboxRules();
+      connectExchangeService(exchangeService, exchangeUserSetting);
     } catch (Exception e) {
       throw new IllegalAccessException("Can not connect to exchange server");
     }
   }
 
-    @Override
-    public List<EventEntity> getEvents(long userIdentityId, String start, String end, ZoneId userTimeZone) throws IllegalAccessException {
-      ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
-        try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
-          exchangeService.setTimeout(300000);
-          String exchangeDomain = exchangeUserSetting.getDomainName();
-          String exchangeUsername = exchangeUserSetting.getUsername();
-          String exchangePassword = exchangeUserSetting.getPassword();
-          String exchangeServerURL = System.getProperty("exo.exchange.server.url");
-          ExchangeCredentials credentials = null;
-          if (exchangeDomain != null) {
-            credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
-          } else {
-            credentials = new WebCredentials(exchangeUsername, exchangePassword);
-          }
-          exchangeService.setCredentials(credentials);
-          exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
-          exchangeService.getInboxRules();
-          ItemView view = new ItemView(100);
+  @Override
+  public List<EventEntity> getEvents(long userIdentityId,
+                                     String start,
+                                     String end,
+                                     ZoneId userTimeZone) throws IllegalAccessException {
+    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
+    try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
+      exchangeService = connectExchangeService(exchangeService, exchangeUserSetting);
+      ItemView view = new ItemView(100);
 
-          ZonedDateTime filterStartDate = AgendaDateUtils.parseAllDayDateToZonedDateTime(start);
-          ZonedDateTime filterEndDate = AgendaDateUtils.parseAllDayDateToZonedDateTime(end).plusDays(1);
+      ZonedDateTime filterStartDate = AgendaDateUtils.parseAllDayDateToZonedDateTime(start);
+      ZonedDateTime filterEndDate = AgendaDateUtils.parseAllDayDateToZonedDateTime(end).plusDays(1);
 
-          SearchFilter fromFilter = new SearchFilter.IsGreaterThanOrEqualTo(AppointmentSchema.Start, AgendaDateUtils.toDate(filterStartDate));
-          SearchFilter toFilter = new SearchFilter.IsLessThanOrEqualTo(AppointmentSchema.End, AgendaDateUtils.toDate(filterEndDate));
-          SearchFilter inRangeFilter = new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromFilter, toFilter);
-          FindItemsResults<Item> findResults;
-          findResults = exchangeService.findItems(WellKnownFolderName.Calendar, inRangeFilter, view);
-          List<Item> items = findResults.getItems();
-          List<EventEntity> eventEntities = new ArrayList<>();
-          for (int i = 0; i < items.size(); i++) {
-            EventEntity event = new EventEntity();
-            event.setSummary(items.get(i).getSubject());
-            PropertyBag properties = items.get(i).getPropertyBag();
-            Set<Map.Entry<PropertyDefinition, Object>> entrySet = properties.getProperties().entrySet();
+      SearchFilter fromFilter = new SearchFilter.IsGreaterThanOrEqualTo(AppointmentSchema.Start,
+                                                                        AgendaDateUtils.toDate(filterStartDate));
+      SearchFilter toFilter = new SearchFilter.IsLessThanOrEqualTo(AppointmentSchema.End, AgendaDateUtils.toDate(filterEndDate));
+      SearchFilter inRangeFilter = new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromFilter, toFilter);
+      FindItemsResults<Item> findResults;
+      findResults = exchangeService.findItems(WellKnownFolderName.Calendar, inRangeFilter, view);
+      List<Item> items = findResults.getItems();
+      List<EventEntity> eventEntities = new ArrayList<>();
+      for (int i = 0; i < items.size(); i++) {
+        EventEntity event = new EventEntity();
+        event.setSummary(items.get(i).getSubject());
+        PropertyBag properties = items.get(i).getPropertyBag();
+        Set<Map.Entry<PropertyDefinition, Object>> entrySet = properties.getProperties().entrySet();
 
-            Date startDate = (Date) Objects.requireNonNull(entrySet.stream().filter(entry -> entry.getKey().getUri().equals("calendar:Start")).findFirst().orElse(null)).getValue();
-            ZonedDateTime startDateTime = AgendaDateUtils.fromDate(startDate).withZoneSameInstant(userTimeZone);
-            String startDateRFC3339 = AgendaDateUtils.toRFC3339Date(startDateTime);
-            event.setStart(startDateRFC3339);
+        Date startDate = (Date) Objects.requireNonNull(entrySet.stream()
+                                                               .filter(entry -> entry.getKey().getUri().equals("calendar:Start"))
+                                                               .findFirst()
+                                                               .orElse(null))
+                                       .getValue();
+        ZonedDateTime startDateTime = AgendaDateUtils.fromDate(startDate).withZoneSameInstant(userTimeZone);
+        String startDateRFC3339 = AgendaDateUtils.toRFC3339Date(startDateTime);
+        event.setStart(startDateRFC3339);
 
-            Date endDate = (Date) Objects.requireNonNull(entrySet.stream().filter(entry -> entry.getKey().getUri().equals("calendar:End")).findFirst().orElse(null)).getValue();
-            ZonedDateTime endDateTime = AgendaDateUtils.fromDate(endDate).withZoneSameInstant(userTimeZone);
-            String endDateRFC3339 = AgendaDateUtils.toRFC3339Date(endDateTime);
-            event.setEnd(endDateRFC3339);
+        Date endDate = (Date) Objects.requireNonNull(entrySet.stream()
+                                                             .filter(entry -> entry.getKey().getUri().equals("calendar:End"))
+                                                             .findFirst()
+                                                             .orElse(null))
+                                     .getValue();
+        ZonedDateTime endDateTime = AgendaDateUtils.fromDate(endDate).withZoneSameInstant(userTimeZone);
+        String endDateRFC3339 = AgendaDateUtils.toRFC3339Date(endDateTime);
+        event.setEnd(endDateRFC3339);
 
-            eventEntities.add(event);
-          }
-            return eventEntities;
-        } catch (Exception e) {
-            throw new IllegalAccessException("Can not connect to exchange server");
-        }
-
+        eventEntities.add(event);
+      }
+      return eventEntities;
+    } catch (Exception e) {
+      throw new IllegalAccessException("Can not connect to exchange server");
     }
+  }
+    
+  private ExchangeService connectExchangeService(ExchangeService exchangeService,
+                                                 ExchangeUserSetting exchangeUserSetting) throws Exception {
+    exchangeService.setTimeout(300000);
+    String exchangeDomain = exchangeUserSetting.getDomainName();
+    String exchangeUsername = exchangeUserSetting.getUsername();
+    String exchangePassword = exchangeUserSetting.getPassword();
+    String exchangeServerURL = System.getProperty("exo.exchange.server.url");
+    ExchangeCredentials credentials = null;
+    if (exchangeDomain != null) {
+      credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
+    } else {
+      credentials = new WebCredentials(exchangeUsername, exchangePassword);
+    }
+    exchangeService.setCredentials(credentials);
+    exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
+    exchangeService.getInboxRules();
+    return exchangeService;
+
+  }
 }
