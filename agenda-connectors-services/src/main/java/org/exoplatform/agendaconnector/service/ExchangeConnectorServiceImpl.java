@@ -18,9 +18,20 @@ package org.exoplatform.agendaconnector.service;
 
 import java.net.URI;
 import java.time.ZoneId;
-import java.util.List;
+import java.time.ZonedDateTime;
+import java.util.*;
 
+import microsoft.exchange.webservices.data.core.PropertyBag;
+import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
+import microsoft.exchange.webservices.data.core.enumeration.search.LogicalOperator;
+import microsoft.exchange.webservices.data.core.service.item.Item;
+import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
+import microsoft.exchange.webservices.data.property.definition.PropertyDefinition;
+import microsoft.exchange.webservices.data.search.FindItemsResults;
+import microsoft.exchange.webservices.data.search.ItemView;
+import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 import org.exoplatform.agenda.rest.model.EventEntity;
+import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
 import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
@@ -82,8 +93,58 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     }
   }
 
-  @Override
-   public List<EventEntity> getEvents(String start, String end, ZoneId userTimeZone) {
-    return ExchangeConnectorStorage.getEvents(start, end, userTimeZone);
-  }
+    @Override
+    public List<EventEntity> getEvents(long userIdentityId, String start, String end, ZoneId userTimeZone) throws IllegalAccessException {
+      ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
+        try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
+          exchangeService.setTimeout(300000);
+          String exchangeDomain = exchangeUserSetting.getDomainName();
+          String exchangeUsername = exchangeUserSetting.getUsername();
+          String exchangePassword = exchangeUserSetting.getPassword();
+          String exchangeServerURL = System.getProperty("exo.exchange.server.url");
+          ExchangeCredentials credentials = null;
+          if (exchangeDomain != null) {
+            credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
+          } else {
+            credentials = new WebCredentials(exchangeUsername, exchangePassword);
+          }
+          exchangeService.setCredentials(credentials);
+          exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
+          exchangeService.getInboxRules();
+          ItemView view = new ItemView(100);
+
+          ZonedDateTime filterStartDate = AgendaDateUtils.parseAllDayDateToZonedDateTime(start);
+          ZonedDateTime filterEndDate = AgendaDateUtils.parseAllDayDateToZonedDateTime(end).plusDays(1);
+
+          SearchFilter fromFilter = new SearchFilter.IsGreaterThanOrEqualTo(AppointmentSchema.Start, AgendaDateUtils.toDate(filterStartDate));
+          SearchFilter toFilter = new SearchFilter.IsLessThanOrEqualTo(AppointmentSchema.End, AgendaDateUtils.toDate(filterEndDate));
+          SearchFilter inRangeFilter = new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromFilter, toFilter);
+          FindItemsResults<Item> findResults;
+          findResults = exchangeService.findItems(WellKnownFolderName.Calendar, inRangeFilter, view);
+          List<Item> items = findResults.getItems();
+          List<EventEntity> eventEntities = new ArrayList<>();
+          for (int i = 0; i < items.size(); i++) {
+            EventEntity event = new EventEntity();
+            event.setSummary(items.get(i).getSubject());
+            PropertyBag properties = items.get(i).getPropertyBag();
+            Set<Map.Entry<PropertyDefinition, Object>> entrySet = properties.getProperties().entrySet();
+
+            Date startDate = (Date) Objects.requireNonNull(entrySet.stream().filter(entry -> entry.getKey().getUri().equals("calendar:Start")).findFirst().orElse(null)).getValue();
+            ZonedDateTime startDateTime = AgendaDateUtils.fromDate(startDate).withZoneSameInstant(userTimeZone);
+            String startDateRFC3339 = AgendaDateUtils.toRFC3339Date(startDateTime);
+            event.setStart(startDateRFC3339);
+
+            Date endDate = (Date) Objects.requireNonNull(entrySet.stream().filter(entry -> entry.getKey().getUri().equals("calendar:End")).findFirst().orElse(null)).getValue();
+            ZonedDateTime endDateTime = AgendaDateUtils.fromDate(endDate).withZoneSameInstant(userTimeZone);
+            String endDateRFC3339 = AgendaDateUtils.toRFC3339Date(endDateTime);
+            event.setEnd(endDateRFC3339);
+
+            eventEntities.add(event);
+          }
+            return eventEntities;
+        } catch (Exception e) {
+            throw new IllegalAccessException("Can not connect to exchange server");
+        }
+
+    }
 }

@@ -120,8 +120,9 @@ public class ExchangeConnectorRest implements ResourceContainer {
                             String end,
                             @ApiParam(value = "IANA Time zone identitifer", required = false)
                             @QueryParam("timeZoneId")
-                            String timeZoneId) {
+                            String timeZoneId) throws Exception {
 
+    long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     if (StringUtils.isBlank(start)) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Start datetime is mandatory").build();
     }
@@ -129,7 +130,7 @@ public class ExchangeConnectorRest implements ResourceContainer {
       return Response.status(Response.Status.BAD_REQUEST).entity("Time zone is mandatory").build();
     }
     ZoneId userTimeZone = StringUtils.isBlank(timeZoneId) ? ZoneOffset.UTC : ZoneId.of(timeZoneId);
-    List<EventEntity> events = exchangeConnectorService.getEvents(start, end, userTimeZone);
+    List<EventEntity> events = exchangeConnectorService.getEvents(identityId, start, end, userTimeZone);
 
     return Response.ok(events).build();
   }

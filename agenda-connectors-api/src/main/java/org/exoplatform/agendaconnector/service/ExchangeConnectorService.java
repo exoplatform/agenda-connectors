@@ -53,7 +53,7 @@ public interface ExchangeConnectorService {
    * @param userTimeZone User time zone
    * @return {@link List} of {@link EventEntity}
    */
-  List<EventEntity> getEvents(String start, String end, ZoneId userTimeZone);
+  List<EventEntity> getEvents(long userIdentityId,String start, String end, ZoneId userTimeZone) throws IllegalAccessException;
 
   /** 
    * Connects to exchange server by exchange user setting.
