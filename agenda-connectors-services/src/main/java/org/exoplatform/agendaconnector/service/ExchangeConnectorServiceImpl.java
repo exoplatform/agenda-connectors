@@ -86,7 +86,8 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
                                      String end,
                                      ZoneId userTimeZone) throws IllegalAccessException {
     ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
-    try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
+    ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2);
+    try{
       exchangeService = connectExchangeService(exchangeService, exchangeUserSetting);
       ItemView view = new ItemView(100);
 
