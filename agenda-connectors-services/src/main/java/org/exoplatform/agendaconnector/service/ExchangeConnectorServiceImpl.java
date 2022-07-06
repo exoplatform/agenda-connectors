@@ -129,7 +129,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     String exchangeDomain = exchangeUserSetting.getDomainName();
     String exchangeUsername = exchangeUserSetting.getUsername();
     String exchangePassword = exchangeUserSetting.getPassword();
-    String exchangeServerURL = ExchangeConnectorUtils.EXCHANGE_SERVER_URL_PROPERTY;
+    String exchangeServerURL = System.getProperty(ExchangeConnectorUtils.EXCHANGE_SERVER_URL_PROPERTY);
     ExchangeCredentials credentials = null;
     if (exchangeDomain != null) {
       credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
