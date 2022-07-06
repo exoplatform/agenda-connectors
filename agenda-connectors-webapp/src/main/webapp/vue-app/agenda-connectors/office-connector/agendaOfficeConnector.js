@@ -47,7 +47,7 @@ export default {
   canPush: false,
   initialized: false,
   isSignedIn: false,
-  pushing: false,
+  pushing: true,
   rank: 20,
   init(connectionStatusChangedCallback, loadingCallback, apiKey) {
     if (!apiKey) {

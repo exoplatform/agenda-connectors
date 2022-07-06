@@ -21,7 +21,7 @@ export default {
   avatar: '/agenda-connectors/skin/images/MicrosoftExchange.png',
   isOauth: false,
   canConnect: true,
-  canPush: false,
+  canPush: true,
   initialized: true,
   isSignedIn: true,
   pushing: false,
@@ -61,5 +61,19 @@ export default {
         });
         return events;
       });
+  },
+  pushEvent(event){
+    const connectorEvent = this.buildConnectorEvent(event);
+    return agendaExchangeService.pushEventToExchange(connectorEvent);
+  },
+  buildConnectorEvent(event) {
+    const connectorEvent = {
+      summary: event.summary,
+      start: event.start,
+      end: event.end,
+    };
+  
+    return connectorEvent;
   }
+  
 };

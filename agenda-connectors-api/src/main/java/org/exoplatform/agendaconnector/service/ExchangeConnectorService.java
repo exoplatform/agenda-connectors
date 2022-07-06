@@ -59,4 +59,9 @@ public interface ExchangeConnectorService {
                                       String start,
                                       String end,
                                       ZoneId userTimeZone) throws IllegalAccessException;
+
+
+
+  void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone);
+
 }

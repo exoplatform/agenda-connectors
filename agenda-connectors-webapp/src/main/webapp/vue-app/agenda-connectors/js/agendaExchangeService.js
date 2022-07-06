@@ -71,3 +71,20 @@ export const getExchangeEvents = (start, end) => {
     }
   });
 };
+
+export const pushEventToExchange = (event) => {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/pushEvent`, {
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    credentials: 'include',
+    method: 'POST',
+    body: JSON.stringify(event)
+  }).then(resp => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp.status;
+    }
+  });
+};

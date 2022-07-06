@@ -25,6 +25,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
+import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsMode;
+import microsoft.exchange.webservices.data.core.service.item.Appointment;
+import microsoft.exchange.webservices.data.core.service.item.Item;
+import microsoft.exchange.webservices.data.property.complex.FolderId;
 import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
@@ -122,7 +127,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       throw new IllegalAccessException("User " + userIdentityId + " is not allowed to connect to exchange server");
     }
   }
-    
+
   private ExchangeService connectExchangeServer(ExchangeService exchangeService,
                                                  ExchangeUserSetting exchangeUserSetting) throws Exception {
     exchangeService.setTimeout(300000);
@@ -134,5 +139,46 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
     exchangeService.getInboxRules();
     return exchangeService;
+
+  }
+
+  @Override
+  public void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) {
+    try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
+      ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
+      exchangeService.setTimeout(300000);
+      String exchangeDomain = exchangeUserSetting.getDomainName();
+      String exchangeUsername = exchangeUserSetting.getUsername();
+      String exchangePassword = exchangeUserSetting.getPassword();
+      String exchangeServerURL = System.getProperty("exo.exchange.server.url");
+      ExchangeCredentials credentials = null;
+      if (exchangeDomain != null) {
+        credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
+      } else {
+        credentials = new WebCredentials(exchangeUsername, exchangePassword);
+      }
+      exchangeService.setCredentials(credentials);
+      exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
+      exchangeService.getInboxRules();
+      Appointment meeting = new Appointment(exchangeService);
+      // Set the properties on the meeting object to create the meeting.
+      meeting.setSubject(event.getSummary());
+      ZonedDateTime startDate = ZonedDateTime.parse(event.getStart()).withZoneSameInstant(userTimeZone);
+      ZonedDateTime endDate= ZonedDateTime.parse(event.getEnd()).withZoneSameInstant(userTimeZone);
+      meeting.setStart(AgendaDateUtils.toDate(startDate));
+      meeting.setEnd(AgendaDateUtils.toDate(endDate));
+      // Save the meeting to the Calendar folder for
+      // the mailbox owner and send the meeting request.
+      // This method call results in a CreateItem call to EWS.
+      meeting.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
+     // Verify that the meeting was created.
+      Item item = Item.bind(exchangeService, meeting.getId());
+    } catch (Exception e) {
+      try {
+        throw new IllegalAccessException("Can not connect to exchange server");
+      } catch (IllegalAccessException ex) {
+        throw new RuntimeException(ex);
+      }
+    }
   }
 }

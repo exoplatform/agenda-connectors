@@ -161,4 +161,32 @@ public class ExchangeConnectorRest implements ResourceContainer {
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
+
+  @POST
+  @Path("/pushEvent")
+  @Consumes(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @ApiOperation(value = "Create exchange user setting", httpMethod = "POST", response = Response.class, consumes = "application/json")
+  public Response pushEventToExchange(@ApiParam(value = "Exchange user setting object to create", required = true)
+                                        EventEntity event,
+                                      @ApiParam(value = "IANA Time zone identitifer", required = false)
+                                      @QueryParam("timeZoneId")
+                                      String timeZoneId) {
+    if (event == null) {
+      return Response.status(Response.Status.BAD_REQUEST).build();
+    }
+    long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
+    if (StringUtils.isBlank(timeZoneId)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Time zone is mandatory").build();
+    }
+    ZoneId userTimeZone = StringUtils.isBlank(timeZoneId) ? ZoneOffset.UTC : ZoneId.of(timeZoneId);
+    try {
+      exchangeConnectorService.pushEventToExchange(identityId, event, userTimeZone);
+      return Response.ok().build();
+    } catch (Exception e) {
+      LOG.error("Error when creating exchange user setting ", e);
+      return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
 }
