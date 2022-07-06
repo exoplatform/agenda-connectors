@@ -29,8 +29,9 @@ public interface ExchangeConnectorService {
    *
    * @param userIdentityId User identity creating the exchange user setting
    * @param exchangeUserSetting {@link ExchangeUserSetting} object to create
+   * @throws IllegalAccessException when the user is not authorized to create exchange setting
    */
-  void createExchangeSetting(ExchangeUserSetting exchangeUserSetting, long userIdentityId);
+  void createExchangeSetting(ExchangeUserSetting exchangeUserSetting, long userIdentityId) throws IllegalAccessException;
 
   /**
    * Retrieves exchange user setting by its technical user identity identifier.
@@ -48,18 +49,14 @@ public interface ExchangeConnectorService {
   void deleteExchangeSetting(long userIdentityId);
 
   /**
-   * Retrieves list of remote events from Exchange connector.
+   * Retrieves remote user exchange events.
    *
    * @param userTimeZone User time zone
    * @return {@link List} of {@link EventEntity}
+   * @throws IllegalAccessException when the user is not authorized to get remote user exchange events
    */
-  List<EventEntity> getEvents(long userIdentityId, String start, String end, ZoneId userTimeZone) throws IllegalAccessException;
-
-  /** 
-   * Connects to exchange server by exchange user setting.
-   *
-   * @param exchangeUserSetting {@link ExchangeUserSetting} object to connect to exchange server
-   * @throws IllegalAccessException when the connection to exchange server is not established
-   */
-  void connectExchangeSetting(ExchangeUserSetting exchangeUserSetting) throws IllegalAccessException;
+  List<EventEntity> getExchangeEvents(long userIdentityId,
+                                      String start,
+                                      String end,
+                                      ZoneId userTimeZone) throws IllegalAccessException;
 }

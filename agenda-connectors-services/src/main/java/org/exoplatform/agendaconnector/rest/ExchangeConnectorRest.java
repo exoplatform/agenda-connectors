@@ -16,14 +16,23 @@
  */
 package org.exoplatform.agendaconnector.rest;
 
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.List;
+
 import javax.annotation.security.RolesAllowed;
-import javax.ws.rs.*;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
 import org.apache.commons.lang3.StringUtils;
+
 import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.service.ExchangeConnectorService;
@@ -36,10 +45,8 @@ import org.exoplatform.social.core.manager.IdentityManager;
 
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
-
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.util.*;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 
 @Path("/v1/exchange")
 public class ExchangeConnectorRest implements ResourceContainer {
@@ -59,16 +66,21 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Consumes(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(value = "Create exchange user setting", httpMethod = "POST", response = Response.class, consumes = "application/json")
-  public Response createExchangeSetting(@ApiParam(value = "Exchange user setting object to create", required = true)
-  ExchangeUserSetting exchangeUserSetting) {
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
+  public Response createExchangeSetting(@ApiParam(value = "Exchange user setting object to create", required = true) ExchangeUserSetting exchangeUserSetting) {
     if (exchangeUserSetting == null) {
       return Response.status(Response.Status.BAD_REQUEST).build();
     }
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     try {
-      exchangeConnectorService.connectExchangeSetting(exchangeUserSetting);
       exchangeConnectorService.createExchangeSetting(exchangeUserSetting, identityId);
       return Response.ok().build();
+    } catch (IllegalAccessException e) {
+      LOG.warn("User '{}' is not autorized to connect to exchange server", identityId, e);
+      return Response.status(Response.Status.UNAUTHORIZED).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.error("Error when creating exchange user setting ", e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
@@ -79,12 +91,14 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @RolesAllowed("users")
   @Produces(MediaType.APPLICATION_JSON)
   @ApiOperation(value = "Get exchange user setting", httpMethod = "GET", response = Response.class, produces = "application/json")
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response getExchangeSetting() {
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     try {
       return Response.ok(exchangeConnectorService. getExchangeSetting(identityId)).build();
     } catch (Exception e) {
-      LOG.warn("Error retrieving exchange user settings for user with id '{}'", identityId, e);
+      LOG.error("Error when retrieving exchange user settings for user with id '{}'", identityId, e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
@@ -92,13 +106,15 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @DELETE
   @RolesAllowed("users")
   @ApiOperation(value = "Delete exchange user setting", httpMethod = "DELETE", response = Response.class)
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response deleteExchangeSetting() {
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     try {
       exchangeConnectorService.deleteExchangeSetting(identityId);
       return Response.ok().build();
     } catch (Exception e) {
-      LOG.error("Error when deleting exchange user setting ", e);
+      LOG.error("Error when deleting exchange user setting for user with id '{}'", identityId, e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
@@ -110,7 +126,8 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @ApiOperation(value = "Retrieves the remote events list of Exchange Connector", httpMethod = "GET", response = Response.class, produces = "application/json")
   @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
       @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error"), })
+      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response getEvents(
                             @ApiParam(value = "Start datetime using RFC-3339 representation", required = true)
                             @QueryParam("start")
@@ -120,19 +137,28 @@ public class ExchangeConnectorRest implements ResourceContainer {
                             String end,
                             @ApiParam(value = "IANA Time zone identitifer", required = false)
                             @QueryParam("timeZoneId")
-                            String timeZoneId) throws Exception {
+                            String timeZoneId) {
 
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     if (StringUtils.isBlank(start)) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Start datetime is mandatory").build();
     }
+    if (StringUtils.isBlank(end)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("End datetime is mandatory").build();
+    }
     if (StringUtils.isBlank(timeZoneId)) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Time zone is mandatory").build();
     }
     ZoneId userTimeZone = StringUtils.isBlank(timeZoneId) ? ZoneOffset.UTC : ZoneId.of(timeZoneId);
-    List<EventEntity> events = exchangeConnectorService.getEvents(identityId, start, end, userTimeZone);
-
-    return Response.ok(events).build();
+    try {
+      List<EventEntity> events = exchangeConnectorService.getExchangeEvents(identityId, start, end, userTimeZone);
+      return Response.ok(events).build();
+    } catch (IllegalAccessException e) {
+      LOG.warn("User '{}' is not autorized to connect to exchange server or get exchange event informations", identityId, e);
+      return Response.status(Response.Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.error("Error when retrieving user exchange events ", e);
+      return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+    }
   }
-
 }
