@@ -26,11 +26,16 @@ import java.util.Map;
 import java.util.Objects;
 
 import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
+import microsoft.exchange.webservices.data.core.enumeration.service.ConflictResolutionMode;
 import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsMode;
+import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsOrCancellationsMode;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
 import microsoft.exchange.webservices.data.core.service.item.Item;
 import microsoft.exchange.webservices.data.property.complex.FolderId;
+import microsoft.exchange.webservices.data.property.complex.ItemId;
+import org.exoplatform.agenda.model.RemoteEvent;
 import org.exoplatform.agenda.rest.model.EventEntity;
+import org.exoplatform.agenda.service.AgendaRemoteEventService;
 import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
@@ -38,10 +43,8 @@ import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 
 import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion;
-import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
 import microsoft.exchange.webservices.data.core.enumeration.search.LogicalOperator;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
-import microsoft.exchange.webservices.data.core.service.item.Item;
 import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
 import microsoft.exchange.webservices.data.credential.ExchangeCredentials;
 import microsoft.exchange.webservices.data.credential.WebCredentials;
@@ -55,8 +58,11 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
 
   private ExchangeConnectorStorage exchangeConnectorStorage;
 
-  public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage) {
+  private AgendaRemoteEventService agendaRemoteEventService;
+
+  public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage,AgendaRemoteEventService agendaRemoteEventService) {
     this.exchangeConnectorStorage = exchangeConnectorStorage;
+    this.agendaRemoteEventService = agendaRemoteEventService;
   }
 
   @Override
@@ -143,42 +149,42 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
   }
 
   @Override
-  public void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) {
+  public void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException {
+    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
+
     try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
-      ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
-      exchangeService.setTimeout(300000);
-      String exchangeDomain = exchangeUserSetting.getDomainName();
-      String exchangeUsername = exchangeUserSetting.getUsername();
-      String exchangePassword = exchangeUserSetting.getPassword();
-      String exchangeServerURL = System.getProperty("exo.exchange.server.url");
-      ExchangeCredentials credentials = null;
-      if (exchangeDomain != null) {
-        credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
-      } else {
-        credentials = new WebCredentials(exchangeUsername, exchangePassword);
+      connectExchangeServer(exchangeService, exchangeUserSetting);
+      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(event.getId(), identityId);
+      if(remoteEvent == null){
+        Appointment meeting = new Appointment(exchangeService);
+        meeting.setSubject(event.getSummary());
+        ZonedDateTime startDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getStart(), userTimeZone);
+        ZonedDateTime endDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getEnd(), userTimeZone);
+        meeting.setStart(AgendaDateUtils.toDate(startDate));
+        meeting.setEnd(AgendaDateUtils.toDate(endDate));
+        meeting.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
+        RemoteEvent remoteEvent1 = new RemoteEvent();
+        remoteEvent1.setIdentityId(identityId);
+        remoteEvent1.setEventId(event.getId());
+        remoteEvent1.setRemoteProviderId(event.getRemoteProviderId());
+        remoteEvent1.setRemoteProviderName(event.getRemoteProviderName());
+        remoteEvent1.setRemoteId(String.valueOf(meeting.getId()));
+        agendaRemoteEventService.saveRemoteEvent(remoteEvent1);
+      }else{
+        ItemId itemId = new ItemId(remoteEvent.getRemoteId());
+        Appointment appointment = Appointment.bind(exchangeService,itemId);
+        appointment.setSubject(event.getSummary());
+        ZonedDateTime startDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getStart(), userTimeZone);
+        ZonedDateTime endDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getEnd(), userTimeZone);
+        appointment.setStart(AgendaDateUtils.toDate(startDate));
+        appointment.setEnd(AgendaDateUtils.toDate(endDate));
+        appointment.update(ConflictResolutionMode.AlwaysOverwrite,  SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy);
       }
-      exchangeService.setCredentials(credentials);
-      exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
-      exchangeService.getInboxRules();
-      Appointment meeting = new Appointment(exchangeService);
-      // Set the properties on the meeting object to create the meeting.
-      meeting.setSubject(event.getSummary());
-      ZonedDateTime startDate = ZonedDateTime.parse(event.getStart()).withZoneSameInstant(userTimeZone);
-      ZonedDateTime endDate= ZonedDateTime.parse(event.getEnd()).withZoneSameInstant(userTimeZone);
-      meeting.setStart(AgendaDateUtils.toDate(startDate));
-      meeting.setEnd(AgendaDateUtils.toDate(endDate));
-      // Save the meeting to the Calendar folder for
-      // the mailbox owner and send the meeting request.
-      // This method call results in a CreateItem call to EWS.
-      meeting.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
-     // Verify that the meeting was created.
-      Item item = Item.bind(exchangeService, meeting.getId());
+      // Verify that the meeting was created.
+    } catch (ServiceLocalException e) {
+      throw new IllegalAccessException("User " + identityId + " is not allowed to push exchange event informations");
     } catch (Exception e) {
-      try {
-        throw new IllegalAccessException("Can not connect to exchange server");
-      } catch (IllegalAccessException ex) {
-        throw new RuntimeException(ex);
-      }
+      throw new IllegalAccessException("User " + identityId + " is not allowed to connect to exchange server");
     }
-  }
+    }
 }

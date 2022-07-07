@@ -63,16 +63,15 @@ export default {
       });
   },
   pushEvent(event){
-    const connectorEvent = this.buildConnectorEvent(event);
-    return agendaExchangeService.pushEventToExchange(connectorEvent);
-  },
-  buildConnectorEvent(event) {
     const connectorEvent = {
+      id: event.id,
       summary: event.summary,
       start: event.start,
       end: event.end,
+      remoteProviderName: this.name,
+      remoteProviderId: 3,
     };
-  
+    agendaExchangeService.pushEventToExchange(connectorEvent);
     return connectorEvent;
   }
   

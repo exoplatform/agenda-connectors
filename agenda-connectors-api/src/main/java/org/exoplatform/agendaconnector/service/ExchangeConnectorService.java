@@ -61,7 +61,14 @@ public interface ExchangeConnectorService {
                                       ZoneId userTimeZone) throws IllegalAccessException;
 
 
-
-  void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone);
+  /**
+   * push event in exchange agenda.
+   *
+   * @param userTimeZone User time zone
+   * @param identityId User identity
+   * @param event Event to be pushed in exchange agenda
+   * @throws IllegalAccessException when the user is not authorized to push event in exchange agenda
+   */
+  void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException;
 
 }

@@ -73,7 +73,7 @@ export const getExchangeEvents = (start, end) => {
 };
 
 export const pushEventToExchange = (event) => {
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/pushEvent`, {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/pushEvent?timeZoneId=${USER_TIMEZONE_ID}`, {
     headers: {
       'Content-Type': 'application/json'
     },
