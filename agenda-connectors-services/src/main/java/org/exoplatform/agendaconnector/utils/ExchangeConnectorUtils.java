@@ -33,8 +33,6 @@ public class ExchangeConnectorUtils {
 
   public static final Scope  EXCHANGE_CONNECTOR_SETTING_SCOPE = Scope.APPLICATION.id("ExchangeAgendaConnector");
 
-  public static final String EXCHANGE_DOMAIN_NAME_KEY         = "ExchangeDomainName";
-
   public static final String EXCHANGE_USERNAME_KEY            = "ExchangeUsername";
 
   public static final String EXCHANGE_PASSWORD_KEY            = "ExchangePassword";

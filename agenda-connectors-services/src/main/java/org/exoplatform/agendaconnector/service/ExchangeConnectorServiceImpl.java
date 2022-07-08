@@ -126,16 +126,10 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
   private ExchangeService connectExchangeServer(ExchangeService exchangeService,
                                                  ExchangeUserSetting exchangeUserSetting) throws Exception {
     exchangeService.setTimeout(300000);
-    String exchangeDomain = exchangeUserSetting.getDomainName();
     String exchangeUsername = exchangeUserSetting.getUsername();
     String exchangePassword = exchangeUserSetting.getPassword();
     String exchangeServerURL = System.getProperty(ExchangeConnectorUtils.EXCHANGE_SERVER_URL_PROPERTY);
-    ExchangeCredentials credentials = null;
-    if (exchangeDomain != null) {
-      credentials = new WebCredentials(exchangeUsername, exchangePassword, exchangeDomain);
-    } else {
-      credentials = new WebCredentials(exchangeUsername, exchangePassword);
-    }
+    ExchangeCredentials credentials = new WebCredentials(exchangeUsername, exchangePassword);
     exchangeService.setCredentials(credentials);
     exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
     exchangeService.getInboxRules();

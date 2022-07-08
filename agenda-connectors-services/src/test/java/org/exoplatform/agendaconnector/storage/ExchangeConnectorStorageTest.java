@@ -37,7 +37,6 @@ public class ExchangeConnectorStorageTest extends TestCase {
     //Then
     ExchangeUserSetting retrievedExchangeUserSetting = exchangeConnectorStorage.getExchangeSetting(userIdentityId);
     assertNotNull(retrievedExchangeUserSetting);
-    assertEquals("exoplatform", retrievedExchangeUserSetting.getDomainName());
     assertEquals("Root", retrievedExchangeUserSetting.getUsername());
     assertEquals("Root123", retrievedExchangeUserSetting.getPassword());
   }
@@ -52,7 +51,6 @@ public class ExchangeConnectorStorageTest extends TestCase {
     //Then
     ExchangeUserSetting retrievedExchangeUserSetting = exchangeConnectorStorage.getExchangeSetting(userIdentityId);
     assertNotNull(retrievedExchangeUserSetting);
-    assertNotNull(retrievedExchangeUserSetting.getDomainName());
     
     //When
     exchangeConnectorStorage.deleteExchangeSetting(userIdentityId);
@@ -60,14 +58,12 @@ public class ExchangeConnectorStorageTest extends TestCase {
     //Then
     retrievedExchangeUserSetting = exchangeConnectorStorage.getExchangeSetting(userIdentityId);
     assertNotNull(retrievedExchangeUserSetting);
-    assertNull(retrievedExchangeUserSetting.getDomainName());
     assertNull(retrievedExchangeUserSetting.getUsername());
     assertNull(retrievedExchangeUserSetting.getPassword());
   }
   
   private ExchangeUserSetting createExchangeSetting() {
     ExchangeUserSetting createdExchangeUserSetting = new ExchangeUserSetting();
-    createdExchangeUserSetting.setDomainName("exoplatform");
     createdExchangeUserSetting.setUsername("Root");
     createdExchangeUserSetting.setPassword("Root123");
     return createdExchangeUserSetting;

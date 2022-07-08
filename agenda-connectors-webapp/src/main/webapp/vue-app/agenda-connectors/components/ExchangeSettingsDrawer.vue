@@ -29,28 +29,14 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
       <v-form ref="form1" class="pa-2 ms-2 mt-4">
         <div class="d-flex flex-column flex-grow-1">
           <div class="d-flex flex-column mb-2">
-            <label class="d-flex flex-row font-weight-bold my-2">{{ $t('agenda.exchangeCalendar.settings.connect.domain.label') }}</label>
-            <div class="d-flex flex-row">
-              <v-text-field
-                id="domain"
-                v-model="domain"
-                type="text"
-                name="domain"
-                :placeholder="$t('agenda.exchangeCalendar.settings.connect.domain.placeholder')"
-                class="input-block-level ignore-vuetify-classes pa-0"
-                required
-                outlined
-                dense />
-            </div>
-          </div>
-          <div class="d-flex flex-column mb-2">
-            <label class="d-flex flex-row font-weight-bold my-2">{{ $t('agenda.exchangeCalendar.settings.connect.account.label') }}</label>
+            <label class="d-flex flex-row font-weight-bold my-2">{{ $t('agenda.exchangeCalendar.settings.connect.email.label') }}</label>
             <div class="d-flex flex-row">
               <v-text-field
                 v-model="account"
                 type="text"
                 name="account"
-                :placeholder="$t('agenda.exchangeCalendar.settings.connect.account.placeholder')"
+                :error-messages="accountErrorMessage"
+                :placeholder="$t('agenda.exchangeCalendar.settings.connect.email.placeholder')"
                 class="input-block-level ignore-vuetify-classes pa-0"
                 outlined
                 required
@@ -104,7 +90,6 @@ const MAIL_PATTERN = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+")
 export default {
 
   data: () => ({
-    domain: '',
     account: '',
     password: '',
     showPassWord: false,
@@ -115,6 +100,9 @@ export default {
   computed: {
     accountRule() {
       return this.account && this.account.toLowerCase().match(MAIL_PATTERN);
+    },
+    accountErrorMessage() {
+      return this.accountRule || this.account.length === 0 ? '': this.$t('agenda.exchangeCalendar.settings.connect.email.error');
     },
     displayPasswordIcon() {
       return this.showPassWord ? 'mdi-eye': 'mdi-eye-off';
@@ -150,7 +138,6 @@ export default {
       if (!this.disableConnectButton) {
         this.saving = true;
         const exchangeSettings = {
-          'domainName': this.domain,
           'username': this.account,
           'password': this.password
         };
@@ -174,7 +161,6 @@ export default {
       }
     },
     reset() {
-      this.domain = '';
       this.account ='';
       this.password = '';
     }
