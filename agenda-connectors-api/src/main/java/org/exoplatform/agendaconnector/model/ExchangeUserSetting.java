@@ -25,8 +25,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ExchangeUserSetting {
 
-  private String domainName;
-
   private String username;
 
   private String password;
