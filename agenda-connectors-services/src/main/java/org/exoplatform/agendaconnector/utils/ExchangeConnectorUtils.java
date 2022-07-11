@@ -39,8 +39,14 @@ public class ExchangeConnectorUtils {
 
   public static final String EXCHANGE_PASSWORD_KEY            = "ExchangePassword";
   
+  public static final String EXCHANGE_SERVER_URL_PROPERTY = "exo.exchange.server.url";
+  
   public static final String EWS_URL = "/EWS/Exchange.asmx";
-
+  
+  public static final String EXCHANGE_APPOINTMENT_SCHEMA_START = "calendar:Start";
+  
+  public static final String EXCHANGE_APPOINTMENT_SCHEMA_END = "calendar:End";
+  
   private ExchangeConnectorUtils() {
   }
 

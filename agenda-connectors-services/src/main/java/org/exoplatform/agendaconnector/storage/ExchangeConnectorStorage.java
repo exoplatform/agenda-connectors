@@ -16,16 +16,11 @@
  */
 package org.exoplatform.agendaconnector.storage;
 
-import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 import org.exoplatform.commons.api.settings.SettingService;
 import org.exoplatform.commons.api.settings.SettingValue;
 import org.exoplatform.commons.api.settings.data.Context;
-import org.exoplatform.agenda.util.AgendaDateUtils;
-import java.time.*;
-import java.util.ArrayList;
-import java.util.List;
 
 public class ExchangeConnectorStorage {
 
@@ -92,56 +87,4 @@ public class ExchangeConnectorStorage {
                                ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
   }
 
-  public static List<EventEntity> getEvents(String start, String end,ZoneId userTimeZone){
-
-    ZonedDateTime startDate1 = ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), userTimeZone).withZoneSameInstant(ZoneId.systemDefault());
-    ZonedDateTime startDate2 = startDate1.plusDays(1);
-    ZonedDateTime startDate3 = startDate2.plusDays(7);
-    ZonedDateTime startDate4 = startDate3.plusDays(1);
-
-
-
-    String startDateEvent1 = AgendaDateUtils.toRFC3339Date(startDate1);
-    String startDateEvent2 = AgendaDateUtils.toRFC3339Date(startDate2);
-    String startDateEvent3 = AgendaDateUtils.toRFC3339Date(startDate3);
-    String startDateEvent4 = AgendaDateUtils.toRFC3339Date(startDate4);
-
-    String endDateEvent1 = AgendaDateUtils.toRFC3339Date(startDate1.plusHours(1));
-    String endDateEvent2 = AgendaDateUtils.toRFC3339Date(startDate2.plusHours(1));
-    String endDateEvent3 = AgendaDateUtils.toRFC3339Date(startDate3.plusHours(1));
-    String endDateEvent4 = AgendaDateUtils.toRFC3339Date(startDate4.plusHours(1));
-
-    List<EventEntity> events = new ArrayList<>();
-    EventEntity event1 = new EventEntity();
-
-    event1.setId(10);
-    event1.setSummary("event1");
-    event1.setStart(startDateEvent1);
-    event1.setEnd(endDateEvent1);
-
-    EventEntity event2 = new EventEntity();
-    event2.setId(11);
-    event2.setSummary("event2");
-    event2.setStart(startDateEvent2);
-    event2.setEnd(endDateEvent2);
-
-    EventEntity event3 = new EventEntity();
-    event3.setId(12);
-    event3.setSummary("event3");
-    event3.setStart(startDateEvent3);
-    event3.setEnd(endDateEvent3);
-
-    EventEntity event4 = new EventEntity();
-    event4.setId(13);
-    event4.setSummary("event4");
-    event4.setStart(startDateEvent4);
-    event4.setEnd(endDateEvent4);
-
-    events.add(event1);
-    events.add(event2);
-    events.add(event3);
-    events.add(event4);
-
-    return events;
-  }
 }
