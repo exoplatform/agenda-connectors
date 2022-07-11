@@ -36,10 +36,6 @@ public class ExchangeConnectorStorage {
 
     this.settingService.set(Context.USER.id(String.valueOf(userIdentityId)),
                             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
-                            ExchangeConnectorUtils.EXCHANGE_DOMAIN_NAME_KEY,
-                            SettingValue.create(exchangeUserSetting.getDomainName()));
-    this.settingService.set(Context.USER.id(String.valueOf(userIdentityId)),
-                            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
                             ExchangeConnectorUtils.EXCHANGE_USERNAME_KEY,
                             SettingValue.create(exchangeUserSetting.getUsername()));
     this.settingService.set(Context.USER.id(String.valueOf(userIdentityId)),
@@ -50,9 +46,6 @@ public class ExchangeConnectorStorage {
 
   public ExchangeUserSetting getExchangeSetting(long userIdentityId) {
 
-    SettingValue<?> domainName = this.settingService.get(Context.USER.id(String.valueOf(userIdentityId)),
-            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
-            ExchangeConnectorUtils.EXCHANGE_DOMAIN_NAME_KEY);
     SettingValue<?> username = this.settingService.get(Context.USER.id(String.valueOf(userIdentityId)),
             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
             ExchangeConnectorUtils.EXCHANGE_USERNAME_KEY);
@@ -61,9 +54,6 @@ public class ExchangeConnectorStorage {
             ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
 
     ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
-    if (domainName != null) {
-      exchangeUserSetting.setDomainName((String) domainName.getValue());
-    }
     if (username != null) {
       exchangeUserSetting.setUsername((String) username.getValue());
     }
@@ -76,9 +66,6 @@ public class ExchangeConnectorStorage {
   
   public void deleteExchangeSetting(long userIdentityId) {
 
-    this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
-            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
-            ExchangeConnectorUtils.EXCHANGE_DOMAIN_NAME_KEY);
     this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
             ExchangeConnectorUtils.EXCHANGE_USERNAME_KEY);
