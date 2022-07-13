@@ -163,7 +163,7 @@ public class ExchangeConnectorRest implements ResourceContainer {
   }
 
   @POST
-  @Path("/pushEvent")
+  @Path("/event/push")
   @Consumes(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(value = "Push event in exchange agenda", httpMethod = "POST", response = Response.class, consumes = "application/json")
@@ -183,10 +183,12 @@ public class ExchangeConnectorRest implements ResourceContainer {
     try {
       exchangeConnectorService.pushEventToExchange(identityId, event, userTimeZone);
       return Response.ok().build();
+    } catch (IllegalAccessException e) {
+      LOG.warn("User '{}' is not autorized to connect to exchange server or push exchange event informations", identityId, e);
+      return Response.status(Response.Status.UNAUTHORIZED).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.error("Error when pushing event in exchange agenda ", e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
-
 }

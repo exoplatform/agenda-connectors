@@ -52,27 +52,27 @@ export default {
     });
   },
 
-  getEvents(periodStartDate, periodEndDate){
+  getEvents(periodStartDate, periodEndDate) {
     return agendaExchangeService.getExchangeEvents(periodStartDate, periodEndDate)
       .then(events => {
         events.forEach(event => {
+          event.id = event.remoteId;
           event.type = 'remoteEvent';
           event.color = '#FFFFFF';
         });
         return events;
       });
   },
-  pushEvent(event){
-    const connectorEvent = {
+  pushEvent(event) {
+    const exchangeEvent = {
       id: event.id,
       summary: event.summary,
       start: event.start,
       end: event.end,
       remoteProviderName: this.name,
-      remoteProviderId: 3,
     };
-    agendaExchangeService.pushEventToExchange(connectorEvent);
-    return connectorEvent;
+    agendaExchangeService.pushEventToExchange(exchangeEvent);
+    return exchangeEvent;
   }
   
 };

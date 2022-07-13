@@ -8,14 +8,25 @@
   <artifactId>agenda-connectors-services</artifactId>
   <name>eXo Agenda Connectors - Services</name>
   <properties>
-    <exo.test.coverage.ratio>0.2</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.4</exo.test.coverage.ratio>
     <com.microsoft.ews.version>2.0</com.microsoft.ews.version>
   </properties>
   <dependencies>
     <dependency>
+      <groupId>javax.xml.ws</groupId>
+      <artifactId>jaxws-api</artifactId>
+      <version>2.3.1</version>
+    </dependency>
+    <dependency>
       <groupId>org.exoplatform.agenda</groupId>
       <artifactId>agenda-services</artifactId>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.exoplatform.agenda</groupId>
+      <artifactId>agenda-services</artifactId>
+      <type>test-jar</type>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.exoplatform.agenda</groupId>

@@ -1,5 +1,8 @@
 package org.exoplatform.agendaconnector.storage;
 
+import org.exoplatform.agenda.rest.model.EventEntity;
+import org.exoplatform.agenda.util.AgendaDateUtils;
+import org.exoplatform.agendaconnector.service.ExchangeConnectorService;
 import org.hibernate.ObjectNotFoundException;
 import org.junit.After;
 import org.junit.Before;
@@ -12,9 +15,13 @@ import org.exoplatform.container.component.RequestLifeCycle;
 
 import junit.framework.TestCase;
 
+import java.time.*;
+
 public class ExchangeConnectorStorageTest extends TestCase {
 
   private ExchangeConnectorStorage exchangeConnectorStorage;
+
+  private ExchangeConnectorService exchangeConnectorService;
 
   private PortalContainer          container;
 
@@ -22,6 +29,7 @@ public class ExchangeConnectorStorageTest extends TestCase {
   public void setUp() throws Exception {
     container = PortalContainer.getInstance();
     exchangeConnectorStorage = container.getComponentInstanceOfType(ExchangeConnectorStorage.class);
+    exchangeConnectorService = container.getComponentInstanceOfType(ExchangeConnectorService.class);
     begin();
   }
 
@@ -68,6 +76,8 @@ public class ExchangeConnectorStorageTest extends TestCase {
     createdExchangeUserSetting.setPassword("Root123");
     return createdExchangeUserSetting;
   }
+
+
 
   private void begin() {
     ExoContainerContext.setCurrentContainer(container);

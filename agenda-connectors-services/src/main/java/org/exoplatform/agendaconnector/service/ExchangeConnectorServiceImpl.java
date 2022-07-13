@@ -60,7 +60,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
 
   private AgendaRemoteEventService agendaRemoteEventService;
 
-  public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage,AgendaRemoteEventService agendaRemoteEventService) {
+  public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage, AgendaRemoteEventService agendaRemoteEventService) {
     this.exchangeConnectorStorage = exchangeConnectorStorage;
     this.agendaRemoteEventService = agendaRemoteEventService;
   }
@@ -79,17 +79,17 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
   public ExchangeUserSetting getExchangeSetting(long userIdentityId) {
     return exchangeConnectorStorage.getExchangeSetting(userIdentityId);
   }
-  
+
   @Override
   public void deleteExchangeSetting(long userIdentityId) {
     exchangeConnectorStorage.deleteExchangeSetting(userIdentityId);
-  }  
-  
+  }
+
   @Override
   public List<EventEntity> getExchangeEvents(long userIdentityId,
-                                     String start,
-                                     String end,
-                                     ZoneId userTimeZone) throws IllegalAccessException {
+                                             String start,
+                                             String end,
+                                             ZoneId userTimeZone) throws IllegalAccessException {
     ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
     try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
       connectExchangeServer(exchangeService, exchangeUserSetting);
@@ -97,45 +97,46 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
 
       ZonedDateTime startZonedDateTime = AgendaDateUtils.parseAllDayDateToZonedDateTime(start);
       SearchFilter exchangeStartSearchFilter = new SearchFilter.IsGreaterThanOrEqualTo(AppointmentSchema.Start,
-                                                                        AgendaDateUtils.toDate(startZonedDateTime));
+              AgendaDateUtils.toDate(startZonedDateTime));
       ZonedDateTime endZonedDatetime = AgendaDateUtils.parseAllDayDateToZonedDateTime(end).plusDays(1);//We have added on day in order to get events of the end date day
       SearchFilter exchangeEndSearchFilter = new SearchFilter.IsLessThanOrEqualTo(AppointmentSchema.End, AgendaDateUtils.toDate(endZonedDatetime));
-      
+
       SearchFilter exchangeEventsSearchFilter = new SearchFilter.SearchFilterCollection(LogicalOperator.And, exchangeStartSearchFilter, exchangeEndSearchFilter);
       FindItemsResults<Item> exchangeEventsItems = exchangeService.findItems(WellKnownFolderName.Calendar, exchangeEventsSearchFilter, view);
       List<EventEntity> exchangeEvents = new ArrayList<>();
       for (Item exchangeEventItem : exchangeEventsItems) {
         EventEntity exchangeEvent = new EventEntity();
+        exchangeEvent.setRemoteId(String.valueOf(exchangeEventItem.getId()));
         exchangeEvent.setSummary(exchangeEventItem.getSubject());
         Map<PropertyDefinition, Object> exchangeEventItemProperties = exchangeEventItem.getPropertyBag().getProperties();
 
         Date exchangeEventStartDate = (Date) Objects.requireNonNull(exchangeEventItemProperties.entrySet().stream()
-                                                               .filter(exchangeEventItemProperty -> exchangeEventItemProperty.getKey().getUri().equals(ExchangeConnectorUtils.EXCHANGE_APPOINTMENT_SCHEMA_START))
-                                                               .findFirst()
-                                                               .orElse(null))
-                                       .getValue();
+                        .filter(exchangeEventItemProperty -> exchangeEventItemProperty.getKey().getUri().equals(ExchangeConnectorUtils.EXCHANGE_APPOINTMENT_SCHEMA_START))
+                        .findFirst()
+                        .orElse(null))
+                .getValue();
         ZonedDateTime exchangeEventStartDateTime = AgendaDateUtils.fromDate(exchangeEventStartDate).withZoneSameInstant(userTimeZone);
         exchangeEvent.setStart(AgendaDateUtils.toRFC3339Date(exchangeEventStartDateTime));
 
         Date exchangeEventEndDate = (Date) Objects.requireNonNull(exchangeEventItemProperties.entrySet().stream()
-                                                             .filter(exchangeEventItemProperty -> exchangeEventItemProperty.getKey().getUri().equals(ExchangeConnectorUtils.EXCHANGE_APPOINTMENT_SCHEMA_END))
-                                                             .findFirst()
-                                                             .orElse(null))
-                                     .getValue();
+                        .filter(exchangeEventItemProperty -> exchangeEventItemProperty.getKey().getUri().equals(ExchangeConnectorUtils.EXCHANGE_APPOINTMENT_SCHEMA_END))
+                        .findFirst()
+                        .orElse(null))
+                .getValue();
         ZonedDateTime exchangeEventEndDateTime = AgendaDateUtils.fromDate(exchangeEventEndDate).withZoneSameInstant(userTimeZone);
         exchangeEvent.setEnd(AgendaDateUtils.toRFC3339Date(exchangeEventEndDateTime));
         exchangeEvents.add(exchangeEvent);
       }
       return exchangeEvents;
     } catch (ServiceLocalException e) {
-      throw new IllegalAccessException("User " + userIdentityId + " is not allowed to get exchange event informations");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to get exchange event informations");
     } catch (Exception e) {
-      throw new IllegalAccessException("User " + userIdentityId + " is not allowed to connect to exchange server");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
   }
 
   private ExchangeService connectExchangeServer(ExchangeService exchangeService,
-                                                 ExchangeUserSetting exchangeUserSetting) throws Exception {
+                                                ExchangeUserSetting exchangeUserSetting) throws Exception {
     exchangeService.setTimeout(300000);
     String exchangeUsername = exchangeUserSetting.getUsername();
     String exchangePassword = exchangeUserSetting.getPassword();
@@ -145,17 +146,15 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
     exchangeService.getInboxRules();
     return exchangeService;
-
   }
 
   @Override
   public void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException {
     ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
-
     try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
       connectExchangeServer(exchangeService, exchangeUserSetting);
       RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(event.getId(), identityId);
-      if(remoteEvent == null){
+      if (remoteEvent == null) {
         Appointment meeting = new Appointment(exchangeService);
         meeting.setSubject(event.getSummary());
         ZonedDateTime startDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getStart(), userTimeZone);
@@ -163,28 +162,52 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         meeting.setStart(AgendaDateUtils.toDate(startDate));
         meeting.setEnd(AgendaDateUtils.toDate(endDate));
         meeting.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
-        RemoteEvent remoteEvent1 = new RemoteEvent();
-        remoteEvent1.setIdentityId(identityId);
-        remoteEvent1.setEventId(event.getId());
-        remoteEvent1.setRemoteProviderId(event.getRemoteProviderId());
-        remoteEvent1.setRemoteProviderName(event.getRemoteProviderName());
-        remoteEvent1.setRemoteId(String.valueOf(meeting.getId()));
-        agendaRemoteEventService.saveRemoteEvent(remoteEvent1);
-      }else{
+        remoteEvent = new RemoteEvent();
+        remoteEvent.setIdentityId(identityId);
+        remoteEvent.setEventId(event.getId());
+        remoteEvent.setRemoteProviderId(event.getRemoteProviderId());
+        remoteEvent.setRemoteProviderName(event.getRemoteProviderName());
+        remoteEvent.setRemoteId(String.valueOf(meeting.getId()));
+        agendaRemoteEventService.saveRemoteEvent(remoteEvent);
+      } else {
         ItemId itemId = new ItemId(remoteEvent.getRemoteId());
-        Appointment appointment = Appointment.bind(exchangeService,itemId);
+        Appointment appointment = Appointment.bind(exchangeService, itemId);
         appointment.setSubject(event.getSummary());
         ZonedDateTime startDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getStart(), userTimeZone);
         ZonedDateTime endDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getEnd(), userTimeZone);
         appointment.setStart(AgendaDateUtils.toDate(startDate));
         appointment.setEnd(AgendaDateUtils.toDate(endDate));
-        appointment.update(ConflictResolutionMode.AlwaysOverwrite,  SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy);
+        appointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy);
       }
-      // Verify that the meeting was created.
     } catch (ServiceLocalException e) {
-      throw new IllegalAccessException("User " + identityId + " is not allowed to push exchange event informations");
+      throw new IllegalAccessException("User '" + identityId + "' is not allowed to push exchange event informations");
     } catch (Exception e) {
-      throw new IllegalAccessException("User " + identityId + " is not allowed to connect to exchange server");
+      throw new IllegalAccessException("User '" + identityId + "' is not allowed to connect to exchange server");
     }
+  }
+
+
+  @Override
+  public EventEntity getRemoteEventById(long eventId, long identityId, ZoneId userTimeZone) throws IllegalAccessException {
+    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
+    try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
+      connectExchangeServer(exchangeService, exchangeUserSetting);
+      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(eventId, identityId);
+      ItemId itemId = new ItemId(remoteEvent.getRemoteId());
+      Appointment appointment = Appointment.bind(exchangeService, itemId);
+      EventEntity event = new EventEntity();
+      event.setId(eventId);
+      event.setSummary(appointment.getSubject());
+      ZonedDateTime startDateTime = AgendaDateUtils.fromDate(appointment.getStart()).withZoneSameInstant(userTimeZone);
+      ZonedDateTime endDateTime = AgendaDateUtils.fromDate(appointment.getEnd()).withZoneSameInstant(userTimeZone);
+      event.setStart(AgendaDateUtils.toRFC3339Date(startDateTime));
+      event.setEnd(AgendaDateUtils.toRFC3339Date(endDateTime));
+      event.setRemoteId(remoteEvent.getRemoteId());
+      return event;
+    } catch (ServiceLocalException e) {
+      throw new IllegalAccessException("User '" + identityId + "' is not allowed to get remote exchange event informations");
+    } catch (Exception e) {
+      throw new IllegalAccessException("User '" + identityId + "' is not allowed to connect to exchange server");
     }
+  }
 }
