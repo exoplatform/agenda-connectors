@@ -167,6 +167,10 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Consumes(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(value = "Push event in exchange agenda", httpMethod = "POST", response = Response.class, consumes = "application/json")
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response pushEventToExchange(@ApiParam(value = "Event object", required = true)
                                         EventEntity event,
                                       @ApiParam(value = "IANA Time zone identitifer", required = false)

@@ -129,7 +129,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       }
       return exchangeEvents;
     } catch (ServiceLocalException e) {
-      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to get exchange event informations");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to get exchange events informations");
     } catch (Exception e) {
       throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
@@ -185,7 +185,6 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       throw new IllegalAccessException("User '" + identityId + "' is not allowed to connect to exchange server");
     }
   }
-
 
   @Override
   public EventEntity getRemoteEventById(long eventId, long identityId, ZoneId userTimeZone) throws IllegalAccessException {
