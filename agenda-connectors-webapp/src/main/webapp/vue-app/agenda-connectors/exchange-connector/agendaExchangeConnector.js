@@ -21,7 +21,7 @@ export default {
   avatar: '/agenda-connectors/skin/images/MicrosoftExchange.png',
   isOauth: false,
   canConnect: true,
-  canPush: false,
+  canPush: true,
   initialized: true,
   isSignedIn: true,
   pushing: false,
@@ -52,14 +52,27 @@ export default {
     });
   },
 
-  getEvents(periodStartDate, periodEndDate){
+  getEvents(periodStartDate, periodEndDate) {
     return agendaExchangeService.getExchangeEvents(periodStartDate, periodEndDate)
       .then(events => {
         events.forEach(event => {
+          event.id = event.remoteId;
           event.type = 'remoteEvent';
           event.color = '#FFFFFF';
         });
         return events;
       });
+  },
+  pushEvent(event) {
+    const exchangeEvent = {
+      id: event.id,
+      summary: event.summary,
+      start: event.start,
+      end: event.end,
+      remoteProviderName: this.name,
+    };
+    agendaExchangeService.pushEventToExchange(exchangeEvent);
+    return exchangeEvent;
   }
+  
 };
