@@ -161,4 +161,38 @@ public class ExchangeConnectorRest implements ResourceContainer {
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
+
+  @POST
+  @Path("/event/push")
+  @Consumes(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @ApiOperation(value = "Push event in exchange agenda", httpMethod = "POST", response = Response.class, consumes = "application/json")
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
+  public Response pushEventToExchange(@ApiParam(value = "Event object", required = true)
+                                        EventEntity event,
+                                      @ApiParam(value = "IANA Time zone identitifer", required = false)
+                                      @QueryParam("timeZoneId")
+                                      String timeZoneId) {
+    if (event == null) {
+      return Response.status(Response.Status.BAD_REQUEST).build();
+    }
+    long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
+    if (StringUtils.isBlank(timeZoneId)) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Time zone is mandatory").build();
+    }
+    ZoneId userTimeZone = StringUtils.isBlank(timeZoneId) ? ZoneOffset.UTC : ZoneId.of(timeZoneId);
+    try {
+      exchangeConnectorService.pushEventToExchange(identityId, event, userTimeZone);
+      return Response.ok().build();
+    } catch (IllegalAccessException e) {
+      LOG.warn("User '{}' is not autorized to connect to exchange server or push exchange event informations", identityId, e);
+      return Response.status(Response.Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.error("Error when pushing event in exchange agenda ", e);
+      return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+    }
+  }
 }
