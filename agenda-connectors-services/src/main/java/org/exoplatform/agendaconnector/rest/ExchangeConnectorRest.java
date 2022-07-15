@@ -45,11 +45,11 @@ import io.swagger.annotations.ApiResponses;
 @Path("/v1/exchange")
 public class ExchangeConnectorRest implements ResourceContainer {
 
-  private static final Log LOG = ExoLogger.getLogger(ExchangeConnectorRest.class);
+  private static final Log         LOG = ExoLogger.getLogger(ExchangeConnectorRest.class);
 
   private ExchangeConnectorService exchangeConnectorService;
 
-  private IdentityManager identityManager;
+  private IdentityManager          identityManager;
 
   public ExchangeConnectorRest(ExchangeConnectorService exchangeConnectorService, IdentityManager identityManager) {
     this.exchangeConnectorService = exchangeConnectorService;
@@ -60,10 +60,10 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Consumes(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(value = "Create exchange user setting", httpMethod = "POST", response = Response.class, consumes = "application/json")
-  @ApiResponses(value = {@ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
-          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error")})
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response createExchangeSetting(@ApiParam(value = "Exchange user setting object to create", required = true) ExchangeUserSetting exchangeUserSetting) {
     if (exchangeUserSetting == null) {
       return Response.status(Response.Status.BAD_REQUEST).build();
@@ -85,12 +85,12 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @RolesAllowed("users")
   @Produces(MediaType.APPLICATION_JSON)
   @ApiOperation(value = "Get exchange user setting", httpMethod = "GET", response = Response.class, produces = "application/json")
-  @ApiResponses(value = {@ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error")})
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response getExchangeSetting() {
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     try {
-      return Response.ok(exchangeConnectorService.getExchangeSetting(identityId)).build();
+      return Response.ok(exchangeConnectorService. getExchangeSetting(identityId)).build();
     } catch (Exception e) {
       LOG.error("Error when retrieving exchange user settings for user with id '{}'", identityId, e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
@@ -100,8 +100,8 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @DELETE
   @RolesAllowed("users")
   @ApiOperation(value = "Delete exchange user setting", httpMethod = "DELETE", response = Response.class)
-  @ApiResponses(value = {@ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error")})
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response deleteExchangeSetting() {
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     try {
@@ -118,20 +118,20 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(value = "Retrieves the remote events list of Exchange Connector", httpMethod = "GET", response = Response.class, produces = "application/json")
-  @ApiResponses(value = {@ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
-          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
-          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
-          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error")})
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+      @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+      @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+      @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response getEvents(
-          @ApiParam(value = "Start datetime using RFC-3339 representation", required = true)
-          @QueryParam("start")
-          String start,
-          @ApiParam(value = "End datetime using RFC-3339 representation", required = false)
-          @QueryParam("end")
-          String end,
-          @ApiParam(value = "IANA Time zone identitifer", required = false)
-          @QueryParam("timeZoneId")
-          String timeZoneId) {
+                            @ApiParam(value = "Start datetime using RFC-3339 representation", required = true)
+                            @QueryParam("start")
+                            String start,
+                            @ApiParam(value = "End datetime using RFC-3339 representation", required = false)
+                            @QueryParam("end")
+                            String end,
+                            @ApiParam(value = "IANA Time zone identitifer", required = false)
+                            @QueryParam("timeZoneId")
+                            String timeZoneId) {
 
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     if (StringUtils.isBlank(start)) {
@@ -190,26 +190,21 @@ public class ExchangeConnectorRest implements ResourceContainer {
     }
   }
 
-
   @DELETE
   @Path("{eventId}")
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(
-          value = "Delete an existing event from exchange agenda.",
-          httpMethod = "DELETE",
-          response = Response.class
-  )
+      value = "Delete an existing event from exchange agenda.",
+      httpMethod = "DELETE",
+      response = Response.class)
   public Response deleteEventFromExchange(
           @ApiParam(value = "Event technical identifier", required = true)
-          @PathParam(
-                  "eventId"
-          )
+          @PathParam("eventId")
           long eventId) {
     if (eventId <= 0) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Event technical identifier must be positive").build();
     }
-
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     try {
       exchangeConnectorService.deleteEventFromExchange(identityId, eventId);
