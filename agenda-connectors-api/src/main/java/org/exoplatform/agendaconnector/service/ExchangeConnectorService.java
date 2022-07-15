@@ -51,7 +51,7 @@ public interface ExchangeConnectorService {
   /**
    * Retrieves remote user exchange events.
    *
-   * @param identityId User identity retrieving exchange events
+   * @param userIdentityId User identity retrieving exchange events
    * @param start Start date of retrieved events
    * @param end End date of retrieved events
    * @param userTimeZone User time zone
@@ -75,5 +75,9 @@ public interface ExchangeConnectorService {
   void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException;
 
   EventEntity getRemoteEventById(long eventId, long identityId, ZoneId userTimeZone) throws IllegalAccessException;
+
+  void deleteEventFromExchange(long identityId, long eventId) throws IllegalAccessException;
+
+  EventEntity getDeletedEvent(long identityId, ZoneId userTimeZone) throws IllegalAccessException;
 
 }
