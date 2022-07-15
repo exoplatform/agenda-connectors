@@ -16,6 +16,7 @@
  */
 package org.exoplatform.agendaconnector.service;
 
+import org.exoplatform.agenda.model.Event;
 import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 
@@ -51,7 +52,7 @@ public interface ExchangeConnectorService {
   /**
    * Retrieves remote user exchange events.
    *
-   * @param identityId User identity retrieving exchange events
+   * @param userIdentityId User identity retrieving exchange events
    * @param start Start date of retrieved events
    * @param end End date of retrieved events
    * @param userTimeZone User time zone
@@ -74,6 +75,29 @@ public interface ExchangeConnectorService {
    */
   void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException;
 
+  /**
+   * get remote event from exchange agenda.
+   * @param eventId agenda {@link Event} identifier
+   * @param identityId User identity to get the event from exchange agenda
+   * @param userTimeZone User time zone
+   * @throws IllegalAccessException when the user is not authorized to get event from exchange agenda
+   */
   EventEntity getRemoteEventById(long eventId, long identityId, ZoneId userTimeZone) throws IllegalAccessException;
+
+  /**
+   * delete remote event from exchange agenda.
+   * @param identityId User identity deleting the event from exchange agenda
+   * @param eventId agenda {@link Event} identifier
+   * @throws IllegalAccessException when the user is not authorized to delete event from exchange agenda
+   */
+  void deleteEventFromExchange(long identityId, long eventId) throws IllegalAccessException;
+
+  /**
+   * get removed event from exchange agenda.
+   * @param identityId User identity to get the removed event from exchange agenda
+   * @param userTimeZone User time zone
+   * @throws IllegalAccessException when the user is not authorized to get removed event from exchange agenda
+   */
+  EventEntity getDeletedEvent(long identityId, ZoneId userTimeZone) throws IllegalAccessException;
 
 }

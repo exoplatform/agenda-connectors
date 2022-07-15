@@ -73,6 +73,9 @@ export default {
     };
     agendaExchangeService.pushEventToExchange(exchangeEvent);
     return exchangeEvent;
-  }
-  
+  },
+  deleteEvent(event) {
+    const eventId = event.id;
+    return agendaExchangeService.deleteEventFromExchange(eventId);
+  },
 };

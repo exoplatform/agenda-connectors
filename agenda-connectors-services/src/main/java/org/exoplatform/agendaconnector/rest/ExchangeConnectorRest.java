@@ -21,13 +21,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 import javax.annotation.security.RolesAllowed;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
@@ -192,6 +186,34 @@ public class ExchangeConnectorRest implements ResourceContainer {
       return Response.status(Response.Status.UNAUTHORIZED).entity(e.getMessage()).build();
     } catch (Exception e) {
       LOG.error("Error when pushing event in exchange agenda ", e);
+      return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  @DELETE
+  @Path("{eventId}")
+  @Produces(MediaType.APPLICATION_JSON)
+  @RolesAllowed("users")
+  @ApiOperation(
+      value = "Delete an existing event from exchange agenda.",
+      httpMethod = "DELETE",
+      response = Response.class)
+  public Response deleteEventFromExchange(
+          @ApiParam(value = "Event technical identifier", required = true)
+          @PathParam("eventId")
+          long eventId) {
+    if (eventId <= 0) {
+      return Response.status(Response.Status.BAD_REQUEST).entity("Event technical identifier must be positive").build();
+    }
+    long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
+    try {
+      exchangeConnectorService.deleteEventFromExchange(identityId, eventId);
+      return Response.ok().build();
+    } catch (IllegalAccessException e) {
+      LOG.warn("User '{}' is not autorized to connect to exchange server or remove exchange event informations", identityId, e);
+      return Response.status(Response.Status.UNAUTHORIZED).entity(e.getMessage()).build();
+    } catch (Exception e) {
+      LOG.error("Error when removing event in exchange agenda ", e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }
