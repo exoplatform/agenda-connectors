@@ -88,3 +88,16 @@ export const pushEventToExchange = (event) => {
     }
   });
 };
+
+export const deleteEventFromExchange = (eventId) => {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/${eventId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  }).then((resp) => {
+    if (resp && resp.ok) {
+      return resp.json();
+    } else {
+      throw new Error('Error deleting event');
+    }
+  });
+};

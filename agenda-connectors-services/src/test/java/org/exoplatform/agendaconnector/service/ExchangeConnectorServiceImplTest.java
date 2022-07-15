@@ -4,7 +4,10 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
+import org.exoplatform.agenda.model.EventAttendee;
 import org.hibernate.ObjectNotFoundException;
 import org.junit.After;
 import org.junit.Before;
@@ -120,6 +123,77 @@ public class ExchangeConnectorServiceImplTest extends TestCase {
     } catch (IllegalAccessException | AgendaException e) {
       throw new RuntimeException(e);
     }
+  }
+  public void testDeleteEventFromExchange(){
+    try {
+      // Given
+      System.setProperty("exo.exchange.server.url", "https://acc-ad.exoplatform.org");
+      ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+      exchangeUserSetting.setUsername("azayati");
+      exchangeUserSetting.setPassword("Root@1234");
+      Identity testuser1Identity = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, "testuser1");
+      long userIdentityId = Long.parseLong(testuser1Identity.getId());
+      ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
+      ZonedDateTime startDate = ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone)
+              .withZoneSameInstant(dstTimeZone);
+      ZonedDateTime endDate = startDate.plusHours(1);
+      RemoteProvider remoteProvider = new RemoteProvider();
+      remoteProvider.setName("agenda.exchangeCalendar");
+      // When
+      RemoteProvider remoteProvider1 = agendaRemoteEventService.saveRemoteProvider(remoteProvider);
+      Calendar calendar = agendaCalendarService.createCalendar(new Calendar(0,
+              userIdentityId,
+              false,
+              null,
+              "calendarDescription",
+              null,
+              null,
+              "calendarColor",
+              null));
+      Event event = new Event();
+      event.setSummary("push created event");
+      event.setStart(startDate);
+      event.setEnd(endDate);
+      event.setCalendarId(calendar.getId());
+      EventAttendee eventAttendee = new EventAttendee();
+      eventAttendee.setIdentityId(userIdentityId);
+      List<EventAttendee> attendees = new ArrayList<>();
+      attendees.add(eventAttendee);
+      Event createdEvent = agendaEventService.createEvent(event, attendees, null, null, null, null, true, userIdentityId);
+
+      // Then
+      assertNotNull(createdEvent);
+
+      // When
+      EventEntity eventEntity = new EventEntity();
+      eventEntity.setId(createdEvent.getId());
+      eventEntity.setSummary(createdEvent.getSummary());
+      eventEntity.setStart(AgendaDateUtils.toRFC3339Date(createdEvent.getStart()));
+      eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(createdEvent.getEnd()));
+      eventEntity.setRemoteProviderId(remoteProvider1.getId());
+      eventEntity.setRemoteProviderName(remoteProvider1.getName());
+
+      exchangeConnectorService.createExchangeSetting(exchangeUserSetting, userIdentityId);
+      exchangeConnectorService.pushEventToExchange(userIdentityId, eventEntity, dstTimeZone);
+
+      // Then
+      EventEntity pushedEvent = exchangeConnectorService.getRemoteEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
+      assertNotNull(pushedEvent);
+      assertEquals(pushedEvent.getSummary(), "push created event");
+      assertEquals(pushedEvent.getStart(), AgendaDateUtils.toRFC3339Date(startDate));
+      assertEquals(pushedEvent.getEnd(), AgendaDateUtils.toRFC3339Date(endDate));
+
+      // When
+      exchangeConnectorService.deleteEventFromExchange(userIdentityId, createdEvent.getId());
+      EventEntity removedEvent = exchangeConnectorService.getDeletedEvent(userIdentityId, dstTimeZone);
+
+      // Then
+      assertEquals(removedEvent.getSummary(), "push created event");
+      assertEquals(removedEvent.getStart(), pushedEvent.getStart());
+      assertEquals(removedEvent.getEnd(), pushedEvent.getEnd());
+    }catch (IllegalAccessException | AgendaException e) {
+    throw new RuntimeException(e);
+  }
   }
 
   private void begin() {
