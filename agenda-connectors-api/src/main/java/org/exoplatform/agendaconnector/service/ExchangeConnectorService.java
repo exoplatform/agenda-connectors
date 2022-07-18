@@ -51,6 +51,9 @@ public interface ExchangeConnectorService {
   /**
    * Retrieves remote user exchange events.
    *
+   * @param identityId User identity retrieving exchange events
+   * @param start Start date of retrieved events
+   * @param end End date of retrieved events
    * @param userTimeZone User time zone
    * @return {@link List} of {@link EventEntity}
    * @throws IllegalAccessException when the user is not authorized to get remote user exchange events
@@ -59,4 +62,18 @@ public interface ExchangeConnectorService {
                                       String start,
                                       String end,
                                       ZoneId userTimeZone) throws IllegalAccessException;
+
+
+  /**
+   * Pushes event in exchange agenda.
+   *
+   * @param identityId User identity pushing the event to exchange agenda
+   * @param event Event to be pushed to exchange agenda
+   * @param userTimeZone User time zone
+   * @throws IllegalAccessException when the user is not authorized to push event in exchange agenda
+   */
+  void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException;
+
+  EventEntity getRemoteEventById(long eventId, long identityId, ZoneId userTimeZone) throws IllegalAccessException;
+
 }
