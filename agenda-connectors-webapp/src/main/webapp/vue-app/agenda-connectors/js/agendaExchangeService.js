@@ -89,15 +89,15 @@ export const pushEventToExchange = (event) => {
   });
 };
 
-export const deleteEventFromExchange = (eventId) => {
+export const deleteExchangeEvent = (eventId) => {
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/${eventId}`, {
     method: 'DELETE',
     credentials: 'include',
   }).then((resp) => {
-    if (resp && resp.ok) {
-      return resp.json();
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
     } else {
-      throw new Error('Error deleting event');
+      return resp.json();
     }
   });
 };

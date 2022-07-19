@@ -142,25 +142,12 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     }
   }
 
-  private ExchangeService connectExchangeServer(ExchangeService exchangeService,
-                                                ExchangeUserSetting exchangeUserSetting) throws Exception {
-    exchangeService.setTimeout(300000);
-    String exchangeUsername = exchangeUserSetting.getUsername();
-    String exchangePassword = exchangeUserSetting.getPassword();
-    String exchangeServerURL = System.getProperty(ExchangeConnectorUtils.EXCHANGE_SERVER_URL_PROPERTY);
-    ExchangeCredentials credentials = new WebCredentials(exchangeUsername, exchangePassword);
-    exchangeService.setCredentials(credentials);
-    exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
-    exchangeService.getInboxRules();
-    return exchangeService;
-  }
-
   @Override
-  public void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException {
-    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
+  public void pushEventToExchange(long userIdentityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException {
+    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
     try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
       connectExchangeServer(exchangeService, exchangeUserSetting);
-      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(event.getId(), identityId);
+      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(event.getId(), userIdentityId);
       if (remoteEvent == null) {
         Appointment meeting = new Appointment(exchangeService);
         meeting.setSubject(event.getSummary());
@@ -170,7 +157,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         meeting.setEnd(AgendaDateUtils.toDate(endDate));
         meeting.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
         remoteEvent = new RemoteEvent();
-        remoteEvent.setIdentityId(identityId);
+        remoteEvent.setIdentityId(userIdentityId);
         remoteEvent.setEventId(event.getId());
         remoteEvent.setRemoteProviderId(event.getRemoteProviderId());
         remoteEvent.setRemoteProviderName(event.getRemoteProviderName());
@@ -187,18 +174,18 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         appointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy);
       }
     } catch (ServiceLocalException e) {
-      throw new IllegalAccessException("User '" + identityId + "' is not allowed to push exchange event informations");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to push exchange event informations");
     } catch (Exception e) {
-      throw new IllegalAccessException("User '" + identityId + "' is not allowed to connect to exchange server");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
   }
 
   @Override
-  public EventEntity getRemoteEventById(long eventId, long identityId, ZoneId userTimeZone) throws IllegalAccessException {
-    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
+  public EventEntity getExchangeEventById(long eventId, long userIdentityId, ZoneId userTimeZone) throws IllegalAccessException {
+    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
     try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
       connectExchangeServer(exchangeService, exchangeUserSetting);
-      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(eventId, identityId);
+      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(eventId, userIdentityId);
       ItemId itemId = new ItemId(remoteEvent.getRemoteId());
       Appointment appointment = Appointment.bind(exchangeService, itemId);
       EventEntity event = new EventEntity();
@@ -211,14 +198,14 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       event.setRemoteId(remoteEvent.getRemoteId());
       return event;
     } catch (ServiceLocalException e) {
-      throw new IllegalAccessException("User '" + identityId + "' is not allowed to get remote exchange event informations");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to get remote exchange event informations");
     } catch (Exception e) {
-      throw new IllegalAccessException("User '" + identityId + "' is not allowed to connect to exchange server");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
   }
 
   @Override
-  public void deleteEventFromExchange(long identityId, long eventId) throws IllegalAccessException {
+  public void deleteExchangeEvent(long userIdentityId, long eventId) throws IllegalAccessException {
     EventAttendeeList eventAttendees = agendaEventAttendeeService.getEventAttendees(eventId);
     for (EventAttendee eventAttendee : eventAttendees.getEventAttendees()) {
       RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(eventId, eventAttendee.getIdentityId());
@@ -229,15 +216,16 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         Appointment appointment = Appointment.bind(exchangeService, itemId);
         appointment.delete(DeleteMode.MoveToDeletedItems);
       } catch (ServiceLocalException e) {
-        throw new IllegalAccessException("User '" + identityId + "' is not allowed to remove remote exchange event informations");
+        throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to remove remote exchange event informations");
       } catch (Exception e) {
-        throw new IllegalAccessException("User '" + identityId + "' is not allowed to connect to exchange server");
+        throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
       }
     }
   }
 
-  public EventEntity getDeletedEvent(long identityId, ZoneId userTimeZone) throws IllegalAccessException{
-    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
+  @Override
+  public EventEntity getDeletedExchangeEvent(long userIdentityId, ZoneId userTimeZone) throws IllegalAccessException {
+    ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
     try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
       connectExchangeServer(exchangeService, exchangeUserSetting);
       ItemView itemView = new ItemView(1);
@@ -265,9 +253,22 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       removedEvent.setEnd(AgendaDateUtils.toRFC3339Date(exchangeEventEndDateTime));
       return removedEvent;
     }catch (ServiceLocalException e) {
-      throw new IllegalAccessException("User '" + identityId + "' is not allowed to get deleted remote exchange event informations");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to get deleted remote exchange event informations");
     } catch (Exception e) {
-      throw new IllegalAccessException("User '" + identityId + "' is not allowed to connect to exchange server");
+      throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
+  }
+  
+  private ExchangeService connectExchangeServer(ExchangeService exchangeService,
+                                                ExchangeUserSetting exchangeUserSetting) throws Exception {
+    exchangeService.setTimeout(300000);
+    String exchangeUsername = exchangeUserSetting.getUsername();
+    String exchangePassword = exchangeUserSetting.getPassword();
+    String exchangeServerURL = System.getProperty(ExchangeConnectorUtils.EXCHANGE_SERVER_URL_PROPERTY);
+    ExchangeCredentials credentials = new WebCredentials(exchangeUsername, exchangePassword);
+    exchangeService.setCredentials(credentials);
+    exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
+    exchangeService.getInboxRules();
+    return exchangeService;
   }
 }

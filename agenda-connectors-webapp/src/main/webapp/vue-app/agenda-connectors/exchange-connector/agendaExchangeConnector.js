@@ -75,7 +75,6 @@ export default {
     return exchangeEvent;
   },
   deleteEvent(event) {
-    const eventId = event.id;
-    return agendaExchangeService.deleteEventFromExchange(eventId);
+    return agendaExchangeService.deleteExchangeEvent(event.id);
   },
 };
