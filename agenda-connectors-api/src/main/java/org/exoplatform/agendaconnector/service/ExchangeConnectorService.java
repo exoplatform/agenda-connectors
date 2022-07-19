@@ -100,4 +100,6 @@ public interface ExchangeConnectorService {
    */
   EventEntity getDeletedExchangeEvent(long userIdentityId, ZoneId userTimeZone) throws IllegalAccessException;
 
+  void deleteCanceledEvent(long identityId, long eventId) throws IllegalAccessException;
 }
+

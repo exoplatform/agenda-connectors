@@ -271,4 +271,21 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     exchangeService.getInboxRules();
     return exchangeService;
   }
+
+  @Override
+  public void deleteCanceledEvent(long identityId, long eventId) throws IllegalAccessException {
+      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(eventId, identityId);
+      ExchangeUserSetting exchangeUserSetting = getExchangeSetting(identityId);
+      try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
+        connectExchangeServer(exchangeService, exchangeUserSetting);
+        ItemId itemId = new ItemId(remoteEvent.getRemoteId());
+        Appointment appointment = Appointment.bind(exchangeService, itemId);
+        appointment.delete(DeleteMode.MoveToDeletedItems);
+      } catch (ServiceLocalException e) {
+        throw new IllegalAccessException("User '" + identityId + "' is not allowed to remove canceled remote exchange event informations");
+      } catch (Exception e) {
+        throw new IllegalAccessException("User '" + identityId + "' is not allowed to connect to exchange server");
+      }
+    }
 }
+

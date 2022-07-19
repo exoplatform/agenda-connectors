@@ -76,5 +76,6 @@ export default {
   },
   deleteEvent(event) {
     return agendaExchangeService.deleteExchangeEvent(event.id);
+
   },
 };
