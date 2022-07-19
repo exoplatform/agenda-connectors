@@ -34,8 +34,6 @@ import microsoft.exchange.webservices.data.core.service.item.Appointment;
 import microsoft.exchange.webservices.data.core.service.item.Item;
 import microsoft.exchange.webservices.data.property.complex.FolderId;
 import microsoft.exchange.webservices.data.property.complex.ItemId;
-import org.exoplatform.agenda.model.EventAttendee;
-import org.exoplatform.agenda.model.EventAttendeeList;
 import org.exoplatform.agenda.model.RemoteEvent;
 import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agenda.service.AgendaEventAttendeeService;
@@ -206,22 +204,20 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
 
   @Override
   public void deleteExchangeEvent(long userIdentityId, long eventId) throws IllegalAccessException {
-    EventAttendeeList eventAttendees = agendaEventAttendeeService.getEventAttendees(eventId);
-    for (EventAttendee eventAttendee : eventAttendees.getEventAttendees()) {
-      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(eventId, eventAttendee.getIdentityId());
-      ExchangeUserSetting exchangeUserSetting = getExchangeSetting(eventAttendee.getIdentityId());
+      RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(eventId, userIdentityId);
+      ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
       try (ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2)) {
         connectExchangeServer(exchangeService, exchangeUserSetting);
         ItemId itemId = new ItemId(remoteEvent.getRemoteId());
         Appointment appointment = Appointment.bind(exchangeService, itemId);
         appointment.delete(DeleteMode.MoveToDeletedItems);
+        exchangeConnectorStorage.deleteRemoteEvent( eventId, userIdentityId);
       } catch (ServiceLocalException e) {
         throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to remove remote exchange event informations");
       } catch (Exception e) {
         throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
       }
     }
-  }
 
   @Override
   public EventEntity getDeletedExchangeEvent(long userIdentityId, ZoneId userTimeZone) throws IllegalAccessException {

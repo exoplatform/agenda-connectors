@@ -202,6 +202,10 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
   @ApiOperation(value = "Delete an exchange event from exchange agenda", httpMethod = "DELETE", response = Response.class)
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
   public Response deleteExchangeEvent(
                                       @ApiParam(value = "Event technical identifier", required = true)
                                       @PathParam("eventId")
