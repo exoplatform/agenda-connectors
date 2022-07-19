@@ -107,7 +107,7 @@ public class ExchangeConnectorServiceImplTest extends TestCase {
       exchangeConnectorService.pushEventToExchange(userIdentityId, eventEntity, dstTimeZone);
       
       // Then
-      EventEntity pushedEvent = exchangeConnectorService.getRemoteEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
+      EventEntity pushedEvent = exchangeConnectorService.getExchangeEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
       assertNotNull(pushedEvent);
       assertEquals(pushedEvent.getSummary(), "push created event");
       assertEquals(pushedEvent.getStart(), AgendaDateUtils.toRFC3339Date(startDate));
@@ -116,7 +116,7 @@ public class ExchangeConnectorServiceImplTest extends TestCase {
       // When
       eventEntity.setSummary("push updated event");
       exchangeConnectorService.pushEventToExchange(userIdentityId, eventEntity, dstTimeZone);
-      EventEntity updatedEvent = exchangeConnectorService.getRemoteEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
+      EventEntity updatedEvent = exchangeConnectorService.getExchangeEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
       // Then
       assertNotNull(updatedEvent);
       assertEquals(updatedEvent.getSummary(), "push updated event");
@@ -177,15 +177,15 @@ public class ExchangeConnectorServiceImplTest extends TestCase {
       exchangeConnectorService.pushEventToExchange(userIdentityId, eventEntity, dstTimeZone);
 
       // Then
-      EventEntity pushedEvent = exchangeConnectorService.getRemoteEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
+      EventEntity pushedEvent = exchangeConnectorService.getExchangeEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
       assertNotNull(pushedEvent);
       assertEquals(pushedEvent.getSummary(), "push created event");
       assertEquals(pushedEvent.getStart(), AgendaDateUtils.toRFC3339Date(startDate));
       assertEquals(pushedEvent.getEnd(), AgendaDateUtils.toRFC3339Date(endDate));
 
       // When
-      exchangeConnectorService.deleteEventFromExchange(userIdentityId, createdEvent.getId());
-      EventEntity removedEvent = exchangeConnectorService.getDeletedEvent(userIdentityId, dstTimeZone);
+      exchangeConnectorService.deleteExchangeEvent(userIdentityId, createdEvent.getId());
+      EventEntity removedEvent = exchangeConnectorService.getDeletedExchangeEvent(userIdentityId, dstTimeZone);
 
       // Then
       assertEquals(removedEvent.getSummary(), "push created event");
