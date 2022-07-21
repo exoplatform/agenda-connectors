@@ -25,18 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
-import microsoft.exchange.webservices.data.core.enumeration.service.ConflictResolutionMode;
-import microsoft.exchange.webservices.data.core.enumeration.service.DeleteMode;
-import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsMode;
-import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsOrCancellationsMode;
-import microsoft.exchange.webservices.data.core.service.item.Appointment;
-import microsoft.exchange.webservices.data.core.service.item.Item;
-import microsoft.exchange.webservices.data.property.complex.FolderId;
-import microsoft.exchange.webservices.data.property.complex.ItemId;
 import org.exoplatform.agenda.model.RemoteEvent;
 import org.exoplatform.agenda.rest.model.EventEntity;
-import org.exoplatform.agenda.service.AgendaEventAttendeeService;
 import org.exoplatform.agenda.service.AgendaRemoteEventService;
 import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
@@ -45,11 +35,20 @@ import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 
 import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion;
+import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
 import microsoft.exchange.webservices.data.core.enumeration.search.LogicalOperator;
+import microsoft.exchange.webservices.data.core.enumeration.service.ConflictResolutionMode;
+import microsoft.exchange.webservices.data.core.enumeration.service.DeleteMode;
+import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsMode;
+import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsOrCancellationsMode;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
+import microsoft.exchange.webservices.data.core.service.item.Appointment;
+import microsoft.exchange.webservices.data.core.service.item.Item;
 import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
 import microsoft.exchange.webservices.data.credential.ExchangeCredentials;
 import microsoft.exchange.webservices.data.credential.WebCredentials;
+import microsoft.exchange.webservices.data.property.complex.FolderId;
+import microsoft.exchange.webservices.data.property.complex.ItemId;
 import microsoft.exchange.webservices.data.property.definition.PropertyDefinition;
 import microsoft.exchange.webservices.data.search.FindItemsResults;
 import microsoft.exchange.webservices.data.search.ItemView;
@@ -62,12 +61,9 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
 
   private AgendaRemoteEventService agendaRemoteEventService;
 
-  private AgendaEventAttendeeService agendaEventAttendeeService;
-
-  public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage, AgendaRemoteEventService agendaRemoteEventService, AgendaEventAttendeeService agendaEventAttendeeService) {
+  public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage, AgendaRemoteEventService agendaRemoteEventService) {
     this.exchangeConnectorStorage = exchangeConnectorStorage;
     this.agendaRemoteEventService = agendaRemoteEventService;
-    this.agendaEventAttendeeService = agendaEventAttendeeService;
   }
 
   @Override
@@ -147,19 +143,19 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       connectExchangeServer(exchangeService, exchangeUserSetting);
       RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(event.getId(), userIdentityId);
       if (remoteEvent == null) {
-        Appointment meeting = new Appointment(exchangeService);
-        meeting.setSubject(event.getSummary());
+        Appointment appointment = new Appointment(exchangeService);
+        appointment.setSubject(event.getSummary());
         ZonedDateTime startDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getStart(), userTimeZone);
         ZonedDateTime endDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getEnd(), userTimeZone);
-        meeting.setStart(AgendaDateUtils.toDate(startDate));
-        meeting.setEnd(AgendaDateUtils.toDate(endDate));
-        meeting.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
+        appointment.setStart(AgendaDateUtils.toDate(startDate));
+        appointment.setEnd(AgendaDateUtils.toDate(endDate));
+        appointment.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
         remoteEvent = new RemoteEvent();
         remoteEvent.setIdentityId(userIdentityId);
         remoteEvent.setEventId(event.getId());
         remoteEvent.setRemoteProviderId(event.getRemoteProviderId());
         remoteEvent.setRemoteProviderName(event.getRemoteProviderName());
-        remoteEvent.setRemoteId(String.valueOf(meeting.getId()));
+        remoteEvent.setRemoteId(String.valueOf(appointment.getId()));
         agendaRemoteEventService.saveRemoteEvent(remoteEvent);
       } else {
         ItemId itemId = new ItemId(remoteEvent.getRemoteId());
