@@ -118,4 +118,40 @@ public class ExchangeConnectorServiceImplTest {
     // Then
     verify(appointment, times(1)).update(any(), any());
   }
+
+  @Test
+  public void testDeleteExchangeEvent() throws Exception {
+    // Given
+    ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+    exchangeUserSetting.setUsername("azayati");
+    exchangeUserSetting.setPassword("Root@1234");
+    when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
+    System.setProperty("exo.exchange.server.url", "https://acc-ad.exoplatform.org");
+
+    RemoteEvent remoteEvent = new RemoteEvent();
+    remoteEvent.setEventId(1);
+    remoteEvent.setRemoteId("remoteId");
+    remoteEvent.setRemoteProviderId(1);
+    remoteEvent.setRemoteProviderName("agenda.exchangeCalendar");
+    when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(remoteEvent);
+    Appointment appointment = mock(Appointment.class);
+    when(exchangeService.bindToItem(any(), any(), any())).thenReturn(appointment);
+
+    // When
+    EventEntity eventEntity = new EventEntity();
+    eventEntity.setId(1);
+    eventEntity.setSummary("deleted event");
+    ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
+    ZonedDateTime startDate =
+            ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone).withZoneSameInstant(dstTimeZone);
+    ZonedDateTime endDate = startDate.plusHours(1);
+    eventEntity.setStart(AgendaDateUtils.toRFC3339Date(startDate));
+    eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
+    eventEntity.setRemoteProviderId(1);
+    eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
+    exchangeConnectorService.deleteExchangeEvent(1, 1);
+
+    // Then
+    verify(appointment, times(1)).delete(any());
+  }
 }

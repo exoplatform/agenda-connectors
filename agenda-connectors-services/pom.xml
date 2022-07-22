@@ -8,7 +8,7 @@
   <artifactId>agenda-connectors-services</artifactId>
   <name>eXo Agenda Connectors - Services</name>
   <properties>
-    <exo.test.coverage.ratio>0.4</exo.test.coverage.ratio>
+    <exo.test.coverage.ratio>0.3</exo.test.coverage.ratio>
     <com.microsoft.ews.version>2.0</com.microsoft.ews.version>
   </properties>
   <dependencies>
