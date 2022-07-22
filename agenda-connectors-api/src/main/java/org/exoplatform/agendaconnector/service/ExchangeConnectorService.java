@@ -76,28 +76,10 @@ public interface ExchangeConnectorService {
   void pushEventToExchange(long userIdentityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException;
 
   /**
-   * Gets exchange event from exchange agenda by identifier.
-   * @param eventId agenda {@link Event} identifier
-   * @param userIdentityId User identity getting exchange event from exchange agenda
-   * @param userTimeZone User time zone
-   * @throws IllegalAccessException when the user is not authorized to get event from exchange agenda
-   */
-  EventEntity getExchangeEventById(long eventId, long userIdentityId, ZoneId userTimeZone) throws IllegalAccessException;
-
-  /**
    * Deletes exchange event from exchange agenda.
    * @param userIdentityId User identity deleting the exchange event from exchange agenda
    * @param eventId agenda {@link Event} identifier
    * @throws IllegalAccessException when the user is not authorized to delete event from exchange agenda
    */
   void deleteExchangeEvent(long userIdentityId, long eventId) throws IllegalAccessException;
-
-  /**
-   * Gets deleted exchange event from exchange agenda.
-   * @param userIdentityId User identity getting deleted exchange event from exchange agenda
-   * @param userTimeZone User time zone
-   * @throws IllegalAccessException when the user is not authorized to get deleted exchange event from exchange agenda
-   */
-  EventEntity getDeletedExchangeEvent(long userIdentityId, ZoneId userTimeZone) throws IllegalAccessException;
-
 }

@@ -24,16 +24,17 @@ import org.exoplatform.agenda.service.AgendaRemoteEventService;
 import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
+import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 
 import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({ ExchangeConnectorServiceImpl.class, ExchangeService.class })
+@PrepareForTest({ ExchangeConnectorUtils.class, ExchangeService.class })
 public class ExchangeConnectorServiceImplTest {
 
-  private ExchangeConnectorService exchangeConnectorService;
+  private ExchangeConnectorServiceImpl exchangeConnectorService;
 
   private AgendaRemoteEventService agendaRemoteEventService;
 
@@ -48,16 +49,18 @@ public class ExchangeConnectorServiceImplTest {
     exchangeService = PowerMockito.mock(ExchangeService.class);
     PowerMockito.whenNew(ExchangeService.class).withArguments(any()).thenReturn(exchangeService);
     exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage, agendaRemoteEventService);
+    // PowerMockito.doCallRealMethod().when(exchangeConnectorService).pushEventToExchange(any(),
+    // any(), any());
   }
 
   @Test
   public void testCreateExchangeEvent() throws Exception {
     // Given
     ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
-    exchangeUserSetting.setUsername("azayati");
-    exchangeUserSetting.setPassword("Root@1234");
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
     when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
-    System.setProperty("exo.exchange.server.url", "https://acc-ad.exoplatform.org");
+    System.setProperty("exo.exchange.server.url", "server.url");
     
     when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(null);
     when(exchangeService.getRequestedServerVersion()).thenReturn(ExchangeVersion.Exchange2010_SP2);
@@ -84,10 +87,10 @@ public class ExchangeConnectorServiceImplTest {
   public void testUpdateExchangeEvent() throws Exception {
     // Given
     ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
-    exchangeUserSetting.setUsername("azayati");
-    exchangeUserSetting.setPassword("Root@1234");
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
     when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
-    System.setProperty("exo.exchange.server.url", "https://acc-ad.exoplatform.org");
+    System.setProperty("exo.exchange.server.url", "server.url");
     
     RemoteEvent remoteEvent = new RemoteEvent();
     remoteEvent.setEventId(1);
