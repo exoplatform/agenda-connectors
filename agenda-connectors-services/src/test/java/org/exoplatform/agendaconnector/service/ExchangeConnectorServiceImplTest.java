@@ -1,5 +1,6 @@
 package org.exoplatform.agendaconnector.service;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -10,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -28,7 +30,12 @@ import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 
 import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion;
+import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
+import microsoft.exchange.webservices.data.core.service.item.Item;
+import microsoft.exchange.webservices.data.search.FindItemsResults;
+import microsoft.exchange.webservices.data.search.ItemView;
+import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({ ExchangeConnectorUtils.class, ExchangeService.class })
@@ -49,8 +56,28 @@ public class ExchangeConnectorServiceImplTest {
     exchangeService = PowerMockito.mock(ExchangeService.class);
     PowerMockito.whenNew(ExchangeService.class).withArguments(any()).thenReturn(exchangeService);
     exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage, agendaRemoteEventService);
-    // PowerMockito.doCallRealMethod().when(exchangeConnectorService).pushEventToExchange(any(),
-    // any(), any());
+  }
+  
+  @Test
+  public void testGetExchangeEvents() throws Exception {
+    // Given
+    ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
+    when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
+    System.setProperty("exo.exchange.server.url", "server.url");
+    FindItemsResults<Item> exchangeEventsItems = new FindItemsResults<Item>();
+    when(exchangeService.findItems(any(WellKnownFolderName.class), any(SearchFilter.class), any(ItemView.class))).thenReturn(exchangeEventsItems);
+    
+    // When
+    ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
+    ZonedDateTime startDate =
+            ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone).withZoneSameInstant(dstTimeZone);
+    ZonedDateTime endDate = startDate.plusHours(1);
+    List<EventEntity> retrievedExchangeEvents = exchangeConnectorService.getExchangeEvents(1, AgendaDateUtils.toRFC3339Date(startDate), AgendaDateUtils.toRFC3339Date(endDate), ZoneId.of("Europe/Paris"));
+
+    // Then
+    assertEquals(exchangeEventsItems.getItems().size(), retrievedExchangeEvents.size());
   }
 
   @Test
@@ -123,10 +150,10 @@ public class ExchangeConnectorServiceImplTest {
   public void testDeleteExchangeEvent() throws Exception {
     // Given
     ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
-    exchangeUserSetting.setUsername("azayati");
-    exchangeUserSetting.setPassword("Root@1234");
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
     when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
-    System.setProperty("exo.exchange.server.url", "https://acc-ad.exoplatform.org");
+    System.setProperty("exo.exchange.server.url", "server.url");
 
     RemoteEvent remoteEvent = new RemoteEvent();
     remoteEvent.setEventId(1);
