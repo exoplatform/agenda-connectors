@@ -88,3 +88,16 @@ export const pushEventToExchange = (event) => {
     }
   });
 };
+
+export const deleteExchangeEvent = (eventId) => {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/${eventId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  }).then((resp) => {
+    if (!resp || !resp.ok) {
+      throw new Error('Response code indicates a server error', resp);
+    } else {
+      return resp.json();
+    }
+  });
+};
