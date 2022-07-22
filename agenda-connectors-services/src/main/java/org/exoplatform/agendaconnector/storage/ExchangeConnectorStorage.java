@@ -16,6 +16,7 @@
  */
 package org.exoplatform.agendaconnector.storage;
 
+import org.exoplatform.agenda.storage.AgendaRemoteEventStorage;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 import org.exoplatform.commons.api.settings.SettingService;
@@ -26,8 +27,11 @@ public class ExchangeConnectorStorage {
 
   private SettingService      settingService;
 
-  public ExchangeConnectorStorage(SettingService settingService) {
+  private AgendaRemoteEventStorage remoteEventStorage;
+
+  public ExchangeConnectorStorage(SettingService settingService, AgendaRemoteEventStorage remoteEventStorage) {
     this.settingService = settingService;
+    this.remoteEventStorage = remoteEventStorage;
   }
 
   public void createExchangeSetting(ExchangeUserSetting exchangeUserSetting, long userIdentityId) {
@@ -72,6 +76,10 @@ public class ExchangeConnectorStorage {
     this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
                                ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
                                ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
+  }
+
+  public  void deleteRemoteEvent(long eventId, long userIdentityId){
+    remoteEventStorage.deleteRemoteEvent(eventId,userIdentityId);
   }
 
 }

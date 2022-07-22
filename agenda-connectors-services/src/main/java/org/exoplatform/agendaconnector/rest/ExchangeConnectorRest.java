@@ -21,7 +21,14 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 import javax.annotation.security.RolesAllowed;
-import javax.ws.rs.*;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
@@ -117,12 +124,12 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Path("/events")
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @ApiOperation(value = "Retrieves the remote events list of Exchange Connector", httpMethod = "GET", response = Response.class, produces = "application/json")
+  @ApiOperation(value = "Retrieve the remote exchange events from exchange agenda", httpMethod = "GET", response = Response.class, produces = "application/json")
   @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
       @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
       @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
       @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
-  public Response getEvents(
+  public Response getExchangeEvents(
                             @ApiParam(value = "Start datetime using RFC-3339 representation", required = true)
                             @QueryParam("start")
                             String start,
@@ -160,7 +167,7 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Path("/event/push")
   @Consumes(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @ApiOperation(value = "Push event in exchange agenda", httpMethod = "POST", response = Response.class, consumes = "application/json")
+  @ApiOperation(value = "Push event to exchange agenda", httpMethod = "POST", response = Response.class, consumes = "application/json")
   @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
       @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
       @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
@@ -194,26 +201,27 @@ public class ExchangeConnectorRest implements ResourceContainer {
   @Path("{eventId}")
   @Produces(MediaType.APPLICATION_JSON)
   @RolesAllowed("users")
-  @ApiOperation(
-      value = "Delete an existing event from exchange agenda.",
-      httpMethod = "DELETE",
-      response = Response.class)
-  public Response deleteEventFromExchange(
-          @ApiParam(value = "Event technical identifier", required = true)
-          @PathParam("eventId")
-          long eventId) {
+  @ApiOperation(value = "Delete an exchange event from exchange agenda", httpMethod = "DELETE", response = Response.class)
+  @ApiResponses(value = { @ApiResponse(code = HTTPStatus.OK, message = "Request fulfilled"),
+          @ApiResponse(code = HTTPStatus.BAD_REQUEST, message = "Invalid query input"),
+          @ApiResponse(code = HTTPStatus.UNAUTHORIZED, message = "Unauthorized operation"),
+          @ApiResponse(code = HTTPStatus.INTERNAL_ERROR, message = "Internal server error") })
+  public Response deleteExchangeEvent(
+                                      @ApiParam(value = "Event technical identifier", required = true)
+                                      @PathParam("eventId")
+                                      long eventId) {
     if (eventId <= 0) {
       return Response.status(Response.Status.BAD_REQUEST).entity("Event technical identifier must be positive").build();
     }
     long identityId = ExchangeConnectorUtils.getCurrentUserIdentityId(identityManager);
     try {
-      exchangeConnectorService.deleteEventFromExchange(identityId, eventId);
+      exchangeConnectorService.deleteExchangeEvent(identityId, eventId);
       return Response.ok().build();
     } catch (IllegalAccessException e) {
-      LOG.warn("User '{}' is not autorized to connect to exchange server or remove exchange event informations", identityId, e);
+      LOG.warn("User '{}' is not autorized to connect to exchange server or remove exchange event", identityId, e);
       return Response.status(Response.Status.UNAUTHORIZED).entity(e.getMessage()).build();
     } catch (Exception e) {
-      LOG.error("Error when removing event in exchange agenda ", e);
+      LOG.error("Error when removing exchange event from exchange agenda ", e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
   }

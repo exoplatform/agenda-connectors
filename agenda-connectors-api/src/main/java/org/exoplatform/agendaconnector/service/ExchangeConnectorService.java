@@ -28,8 +28,8 @@ public interface ExchangeConnectorService {
   /**
    * Creates a new exchange user setting
    *
-   * @param userIdentityId User identity creating the exchange user setting
    * @param exchangeUserSetting {@link ExchangeUserSetting} object to create
+   * @param userIdentityId User identity creating the exchange user setting
    * @throws IllegalAccessException when the user is not authorized to create exchange setting
    */
   void createExchangeSetting(ExchangeUserSetting exchangeUserSetting, long userIdentityId) throws IllegalAccessException;
@@ -68,36 +68,18 @@ public interface ExchangeConnectorService {
   /**
    * Pushes event in exchange agenda.
    *
-   * @param identityId User identity pushing the event to exchange agenda
+   * @param userIdentityId User identity pushing the event to exchange agenda
    * @param event Event to be pushed to exchange agenda
    * @param userTimeZone User time zone
    * @throws IllegalAccessException when the user is not authorized to push event in exchange agenda
    */
-  void pushEventToExchange(long identityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException;
+  void pushEventToExchange(long userIdentityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException;
 
   /**
-   * get remote event from exchange agenda.
-   * @param eventId agenda {@link Event} identifier
-   * @param identityId User identity to get the event from exchange agenda
-   * @param userTimeZone User time zone
-   * @throws IllegalAccessException when the user is not authorized to get event from exchange agenda
-   */
-  EventEntity getRemoteEventById(long eventId, long identityId, ZoneId userTimeZone) throws IllegalAccessException;
-
-  /**
-   * delete remote event from exchange agenda.
-   * @param identityId User identity deleting the event from exchange agenda
+   * Deletes exchange event from exchange agenda.
+   * @param userIdentityId User identity deleting the exchange event from exchange agenda
    * @param eventId agenda {@link Event} identifier
    * @throws IllegalAccessException when the user is not authorized to delete event from exchange agenda
    */
-  void deleteEventFromExchange(long identityId, long eventId) throws IllegalAccessException;
-
-  /**
-   * get removed event from exchange agenda.
-   * @param identityId User identity to get the removed event from exchange agenda
-   * @param userTimeZone User time zone
-   * @throws IllegalAccessException when the user is not authorized to get removed event from exchange agenda
-   */
-  EventEntity getDeletedEvent(long identityId, ZoneId userTimeZone) throws IllegalAccessException;
-
+  void deleteExchangeEvent(long userIdentityId, long eventId) throws IllegalAccessException;
 }
