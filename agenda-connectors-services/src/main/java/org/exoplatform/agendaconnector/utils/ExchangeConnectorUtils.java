@@ -16,6 +16,9 @@
  */
 package org.exoplatform.agendaconnector.utils;
 
+import java.net.URI;
+
+import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.utils.CommonsUtils;
 import org.exoplatform.services.log.ExoLogger;
@@ -26,6 +29,11 @@ import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvide
 import org.exoplatform.social.core.manager.IdentityManager;
 import org.exoplatform.web.security.codec.CodecInitializer;
 import org.exoplatform.web.security.security.TokenServiceInitializationException;
+
+import microsoft.exchange.webservices.data.core.ExchangeService;
+import microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion;
+import microsoft.exchange.webservices.data.credential.ExchangeCredentials;
+import microsoft.exchange.webservices.data.credential.WebCredentials;
 
 public class ExchangeConnectorUtils {
 
@@ -76,5 +84,18 @@ public class ExchangeConnectorUtils {
       LOG.warn("Error when decoding password", e);
       return null;
     }
+  }
+  
+  public static ExchangeService connectExchangeServer(ExchangeUserSetting exchangeUserSetting) throws Exception {
+    ExchangeService exchangeService = new ExchangeService(ExchangeVersion.Exchange2010_SP2);
+    exchangeService.setTimeout(300000);
+    String exchangeUsername = exchangeUserSetting.getUsername();
+    String exchangePassword = exchangeUserSetting.getPassword();
+    String exchangeServerURL = System.getProperty(ExchangeConnectorUtils.EXCHANGE_SERVER_URL_PROPERTY);
+    ExchangeCredentials credentials = new WebCredentials(exchangeUsername, exchangePassword);
+    exchangeService.setCredentials(credentials);
+    exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
+    exchangeService.getInboxRules();
+    return exchangeService;
   }
 }

@@ -1,138 +1,184 @@
 package org.exoplatform.agendaconnector.service;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 
-import org.hibernate.ObjectNotFoundException;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
-import org.exoplatform.agenda.exception.AgendaException;
-import org.exoplatform.agenda.model.Calendar;
-import org.exoplatform.agenda.model.Event;
-import org.exoplatform.agenda.model.RemoteProvider;
+import org.exoplatform.agenda.model.RemoteEvent;
 import org.exoplatform.agenda.rest.model.EventEntity;
-import org.exoplatform.agenda.service.AgendaCalendarService;
-import org.exoplatform.agenda.service.AgendaEventService;
 import org.exoplatform.agenda.service.AgendaRemoteEventService;
 import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
-import org.exoplatform.container.ExoContainerContext;
-import org.exoplatform.container.PortalContainer;
-import org.exoplatform.container.component.RequestLifeCycle;
-import org.exoplatform.social.core.identity.model.Identity;
-import org.exoplatform.social.core.identity.provider.OrganizationIdentityProvider;
-import org.exoplatform.social.core.manager.IdentityManager;
+import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
+import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 
-import junit.framework.TestCase;
+import microsoft.exchange.webservices.data.core.ExchangeService;
+import microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion;
+import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
+import microsoft.exchange.webservices.data.core.service.item.Appointment;
+import microsoft.exchange.webservices.data.core.service.item.Item;
+import microsoft.exchange.webservices.data.search.FindItemsResults;
+import microsoft.exchange.webservices.data.search.ItemView;
+import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 
-public class ExchangeConnectorServiceImplTest extends TestCase {
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({ ExchangeConnectorUtils.class, ExchangeService.class })
+public class ExchangeConnectorServiceImplTest {
 
-  private ExchangeConnectorService exchangeConnectorService;
-
-  private IdentityManager          identityManager;
-
-  private AgendaCalendarService    agendaCalendarService;
-
-  private AgendaEventService       agendaEventService;
-
-  private PortalContainer          container;
+  private ExchangeConnectorServiceImpl exchangeConnectorService;
 
   private AgendaRemoteEventService agendaRemoteEventService;
 
+  private ExchangeService          exchangeService;
+  
+  private ExchangeConnectorStorage exchangeConnectorStorage;
+
   @Before
   public void setUp() throws Exception {
-    container = PortalContainer.getInstance();
-    exchangeConnectorService = container.getComponentInstanceOfType(ExchangeConnectorService.class);
-    agendaEventService = container.getComponentInstanceOfType(AgendaEventService.class);
-    identityManager = container.getComponentInstanceOfType(IdentityManager.class);
-    agendaCalendarService = container.getComponentInstanceOfType(AgendaCalendarService.class);
-    agendaRemoteEventService = container.getComponentInstanceOfType(AgendaRemoteEventService.class);
-    begin();
+    agendaRemoteEventService = mock(AgendaRemoteEventService.class);
+    exchangeConnectorStorage = mock(ExchangeConnectorStorage.class);
+    exchangeService = PowerMockito.mock(ExchangeService.class);
+    PowerMockito.whenNew(ExchangeService.class).withArguments(any()).thenReturn(exchangeService);
+    exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage, agendaRemoteEventService);
+  }
+  
+  @Test
+  public void testGetExchangeEvents() throws Exception {
+    // Given
+    ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
+    when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
+    System.setProperty("exo.exchange.server.url", "server.url");
+    FindItemsResults<Item> exchangeEventsItems = new FindItemsResults<Item>();
+    when(exchangeService.findItems(any(WellKnownFolderName.class), any(SearchFilter.class), any(ItemView.class))).thenReturn(exchangeEventsItems);
+    
+    // When
+    ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
+    ZonedDateTime startDate =
+            ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone).withZoneSameInstant(dstTimeZone);
+    ZonedDateTime endDate = startDate.plusHours(1);
+    List<EventEntity> retrievedExchangeEvents = exchangeConnectorService.getExchangeEvents(1, AgendaDateUtils.toRFC3339Date(startDate), AgendaDateUtils.toRFC3339Date(endDate), ZoneId.of("Europe/Paris"));
+
+    // Then
+    assertEquals(exchangeEventsItems.getItems().size(), retrievedExchangeEvents.size());
   }
 
   @Test
-  public void testPushEventToExchange() {
-    try {
-      // Given
-      System.setProperty("exo.exchange.server.url", "https://acc-ad.exoplatform.org");
-      ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
-      exchangeUserSetting.setUsername("azayati");
-      exchangeUserSetting.setPassword("Root@1234");
-      Identity testuser1Identity = identityManager.getOrCreateIdentity(OrganizationIdentityProvider.NAME, "testuser1");
-      long userIdentityId = Long.parseLong(testuser1Identity.getId());
-      ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
-      ZonedDateTime startDate = ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone)
-                                             .withZoneSameInstant(dstTimeZone);
-      ZonedDateTime endDate = startDate.plusHours(1);
-      RemoteProvider remoteProvider = new RemoteProvider();
-      remoteProvider.setName("agenda.exchangeCalendar");
-      // When
-      RemoteProvider remoteProvider1 = agendaRemoteEventService.saveRemoteProvider(remoteProvider);
-      Calendar calendar = agendaCalendarService.createCalendar(new Calendar(0,
-                                                                            userIdentityId,
-                                                                            false,
-                                                                            null,
-                                                                            "calendarDescription",
-                                                                            null,
-                                                                            null,
-                                                                            "calendarColor",
-                                                                            null));
-      Event event = new Event();
-      event.setSummary("push created event");
-      event.setStart(startDate);
-      event.setEnd(endDate);
-      event.setCalendarId(calendar.getId());
-      Event createdEvent = agendaEventService.createEvent(event, null, null, null, null, null, true, userIdentityId);
-      
-      // Then
-      assertNotNull(createdEvent);
+  public void testCreateExchangeEvent() throws Exception {
+    // Given
+    ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
+    when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
+    System.setProperty("exo.exchange.server.url", "server.url");
+    
+    when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(null);
+    when(exchangeService.getRequestedServerVersion()).thenReturn(ExchangeVersion.Exchange2010_SP2);
+    
+    // When
+    EventEntity eventEntity = new EventEntity();
+    eventEntity.setId(1);
+    eventEntity.setSummary("push created event");
+    ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
+    ZonedDateTime startDate =
+                            ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone).withZoneSameInstant(dstTimeZone);
+    ZonedDateTime endDate = startDate.plusHours(1);
+    eventEntity.setStart(AgendaDateUtils.toRFC3339Date(startDate));
+    eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
+    eventEntity.setRemoteProviderId(1);
+    eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
 
-      // When
-      EventEntity eventEntity = new EventEntity();
-      eventEntity.setId(createdEvent.getId());
-      eventEntity.setSummary(createdEvent.getSummary());
-      eventEntity.setStart(AgendaDateUtils.toRFC3339Date(createdEvent.getStart()));
-      eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(createdEvent.getEnd()));
-      eventEntity.setRemoteProviderId(remoteProvider1.getId());
-      eventEntity.setRemoteProviderName(remoteProvider1.getName());
-
-      exchangeConnectorService.createExchangeSetting(exchangeUserSetting, userIdentityId);
-      exchangeConnectorService.pushEventToExchange(userIdentityId, eventEntity, dstTimeZone);
-      
-      // Then
-      EventEntity pushedEvent = exchangeConnectorService.getRemoteEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
-      assertNotNull(pushedEvent);
-      assertEquals(pushedEvent.getSummary(), "push created event");
-      assertEquals(pushedEvent.getStart(), AgendaDateUtils.toRFC3339Date(startDate));
-      assertEquals(pushedEvent.getEnd(), AgendaDateUtils.toRFC3339Date(endDate));
-      
-      // When
-      eventEntity.setSummary("push updated event");
-      exchangeConnectorService.pushEventToExchange(userIdentityId, eventEntity, dstTimeZone);
-      EventEntity updatedEvent = exchangeConnectorService.getRemoteEventById(createdEvent.getId(), userIdentityId, dstTimeZone);
-      // Then
-      assertNotNull(updatedEvent);
-      assertEquals(updatedEvent.getSummary(), "push updated event");
-    } catch (IllegalAccessException | AgendaException e) {
-      throw new RuntimeException(e);
-    }
+    // Then
+    verify(agendaRemoteEventService, times(1)).saveRemoteEvent(any());
   }
 
-  private void begin() {
-    ExoContainerContext.setCurrentContainer(container);
-    RequestLifeCycle.begin(container);
+  @Test
+  public void testUpdateExchangeEvent() throws Exception {
+    // Given
+    ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
+    when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
+    System.setProperty("exo.exchange.server.url", "server.url");
+    
+    RemoteEvent remoteEvent = new RemoteEvent();
+    remoteEvent.setEventId(1);
+    remoteEvent.setRemoteId("remoteId");
+    remoteEvent.setRemoteProviderId(1);
+    remoteEvent.setRemoteProviderName("agenda.exchangeCalendar");
+    when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(remoteEvent);
+    Appointment appointment = mock(Appointment.class);
+    when(exchangeService.bindToItem(any(), any(), any())).thenReturn(appointment);
+
+    // When
+    EventEntity eventEntity = new EventEntity();
+    eventEntity.setId(1);
+    eventEntity.setSummary("push created event");
+    ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
+    ZonedDateTime startDate =
+                            ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone).withZoneSameInstant(dstTimeZone);
+    ZonedDateTime endDate = startDate.plusHours(1);
+    eventEntity.setStart(AgendaDateUtils.toRFC3339Date(startDate));
+    eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
+    eventEntity.setRemoteProviderId(1);
+    eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    
+    // Then
+    verify(appointment, times(1)).update(any(), any());
   }
 
-  private void end() {
-    RequestLifeCycle.end();
-  }
+  @Test
+  public void testDeleteExchangeEvent() throws Exception {
+    // Given
+    ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
+    when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
+    System.setProperty("exo.exchange.server.url", "server.url");
 
-  @After
-  public void tearDown() throws ObjectNotFoundException {
-    end();
+    RemoteEvent remoteEvent = new RemoteEvent();
+    remoteEvent.setEventId(1);
+    remoteEvent.setRemoteId("remoteId");
+    remoteEvent.setRemoteProviderId(1);
+    remoteEvent.setRemoteProviderName("agenda.exchangeCalendar");
+    when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(remoteEvent);
+    Appointment appointment = mock(Appointment.class);
+    when(exchangeService.bindToItem(any(), any(), any())).thenReturn(appointment);
+
+    // When
+    EventEntity eventEntity = new EventEntity();
+    eventEntity.setId(1);
+    eventEntity.setSummary("deleted event");
+    ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
+    ZonedDateTime startDate =
+            ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone).withZoneSameInstant(dstTimeZone);
+    ZonedDateTime endDate = startDate.plusHours(1);
+    eventEntity.setStart(AgendaDateUtils.toRFC3339Date(startDate));
+    eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
+    eventEntity.setRemoteProviderId(1);
+    eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
+    exchangeConnectorService.deleteExchangeEvent(1, 1);
+
+    // Then
+    verify(appointment, times(1)).delete(any());
   }
 }
