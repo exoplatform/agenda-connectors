@@ -37,6 +37,12 @@
       <artifactId>social-component-service</artifactId>
        <scope>provided</scope>
     </dependency>
+    <!--swagger-->
+    <dependency>
+      <groupId>io.swagger.core.v3</groupId>
+      <artifactId>swagger-annotations</artifactId>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>com.microsoft.ews-java-api</groupId>
       <artifactId>ews-java-api</artifactId>
