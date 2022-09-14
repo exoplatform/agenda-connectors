@@ -28,7 +28,7 @@
     <!-- 3rd party libraries versions -->
     <org.exoplatform.social.version>6.3.x-SNAPSHOT</org.exoplatform.social.version>
     <org.exoplatform.platform-ui.version>6.3.x-SNAPSHOT</org.exoplatform.platform-ui.version>
-    <org.exoplatform.agenda.version>1.2.x-SNAPSHOT</org.exoplatform.agenda.version>
+    <addon.exo.agenda.version>1.2.x-SNAPSHOT</addon.exo.agenda.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
   </properties>
@@ -54,7 +54,7 @@
       <dependency>
         <groupId>org.exoplatform.agenda</groupId>
         <artifactId>agenda-parent</artifactId>
-        <version>${org.exoplatform.agenda.version}</version>
+        <version>${addon.exo.agenda.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
