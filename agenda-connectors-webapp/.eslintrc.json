@@ -3,7 +3,8 @@
     "eslint-config-meedsio"
   ],
   "globals": {
-    "gapi": true
+    "gapi": true,
+    "google": true
   },
   "rules": {
     "vue/no-mutating-props": "warn",
