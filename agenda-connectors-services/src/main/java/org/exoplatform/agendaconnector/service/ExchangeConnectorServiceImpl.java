@@ -49,12 +49,17 @@ import microsoft.exchange.webservices.data.property.definition.PropertyDefinitio
 import microsoft.exchange.webservices.data.search.FindItemsResults;
 import microsoft.exchange.webservices.data.search.ItemView;
 import microsoft.exchange.webservices.data.search.filter.SearchFilter;
+import org.exoplatform.services.log.ExoLogger;
+import org.exoplatform.services.log.Log;
 
 public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
 
   private ExchangeConnectorStorage exchangeConnectorStorage;
 
   private AgendaRemoteEventService agendaRemoteEventService;
+
+  private static final Log LOG = ExoLogger.getLogger(ExchangeConnectorServiceImpl.class);
+
 
   public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage,
                                       AgendaRemoteEventService agendaRemoteEventService) {
@@ -67,6 +72,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     try (ExchangeService exchangeService = ExchangeConnectorUtils.connectExchangeServer(exchangeUserSetting)) {
       exchangeConnectorStorage.createExchangeSetting(exchangeUserSetting, userIdentityId);
     } catch (Exception e) {
+      LOG.error("Error when user {} tries to connect to exchange server",userIdentityId,e);
       throw new IllegalAccessException("User " + userIdentityId + " is not allowed to connect to exchange server");
     }
   }
@@ -153,8 +159,10 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       }
       return exchangeEvents;
     } catch (ServiceLocalException e) {
+      LOG.error("User {} is not allowed to get exchange events informations",userIdentityId,e);
       throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to get exchange events informations");
     } catch (Exception e) {
+      LOG.error("User {} is not allowed to connect to exchange server",userIdentityId,e);
       throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
   }
@@ -190,8 +198,10 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         appointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy);
       }
     } catch (ServiceLocalException e) {
+      LOG.error("User {} is not allowed to push exchange event informations",userIdentityId,e);
       throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to push exchange event informations");
     } catch (Exception e) {
+      LOG.error("User {} is not allowed to connect to exchange server",userIdentityId,e);
       throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
   }
@@ -206,9 +216,11 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       appointment.delete(DeleteMode.MoveToDeletedItems);
       exchangeConnectorStorage.deleteRemoteEvent(eventId, userIdentityId);
     } catch (ServiceLocalException e) {
+      LOG.error("User {} is not allowed to remove remote exchange event informations",userIdentityId,e);
       throw new IllegalAccessException("User '" + userIdentityId
           + "' is not allowed to remove remote exchange event informations");
     } catch (Exception e) {
+      LOG.error("User {} is not allowed to connect to exchange server",userIdentityId,e);
       throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
   }
