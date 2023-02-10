@@ -64,6 +64,9 @@ export default {
         };
         const cookieSuffix = this.user && this.user.substring(0, this.user.indexOf('@'));
         const tokenResponse = getCookie(`g_connector_oauth_${cookieSuffix}`);
+        if (tokenResponse) {
+          setCookie(`g_connector_oauth_${cookieSuffix}`, JSON.stringify(tokenResponse), 90);
+        }
         if (refresh && tokenResponse) {
           const response = JSON.parse(tokenResponse);
           return refreshToken(this.CLIENT_ID, this.SECRET_KEY, response.refresh_token)
