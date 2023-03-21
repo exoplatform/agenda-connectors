@@ -65,7 +65,9 @@ export default {
         const cookieSuffix = this.user && this.user.substring(0, this.user.indexOf('@'));
         const tokenResponse = getCookie(`g_connector_oauth_${cookieSuffix}`);
         if (tokenResponse) {
-          setCookie(`g_connector_oauth_${cookieSuffix}`, JSON.stringify(tokenResponse), 90);
+          setCookie(`g_connector_oauth_${cookieSuffix}`, tokenResponse, 90);
+          const g_stateCookie = getCookie('g_state');
+          setCookie('g_state', g_stateCookie, 90);
         }
         if (refresh && tokenResponse) {
           const response = JSON.parse(tokenResponse);
@@ -122,6 +124,7 @@ export default {
               if (this.credential) {
                 const userEmail = this.credential.email;
                 const cookieSuffix = userEmail.substring(0, userEmail.indexOf('@'));
+
                 setCookie(`g_connector_oauth_${cookieSuffix}`, JSON.stringify(tokenResponse), 90);
                 resolve(userEmail);
               } else {
@@ -352,10 +355,6 @@ function initGoogleConnector(connector) {
   connector.loadingCallback(connector, true);
   window.require(['https://apis.google.com/js/api.js', 'https://accounts.google.com/gsi/client'], () => {
     connector.identity = google.accounts.id;
-    const cookie = getCookie('g_state');
-    if (cookie && !JSON.parse(cookie).i_t) {
-      connector.isSignedIn = true;
-    }
     connector.identity.initialize({
       client_id: connector.CLIENT_ID,
       callback: (credResponse) => {
@@ -377,6 +376,10 @@ function initGoogleConnector(connector) {
       gapi.client.init({
         discoveryDocs: connector.DISCOVERY_DOCS,
       }).then(function () {
+        const cookie = getCookie('g_state');
+        if (cookie && !JSON.parse(cookie).i_t) {
+          connector.isSignedIn = true;
+        }
         connector.cientOauth = google.accounts.oauth2;
         connector.codeClient = connector.cientOauth.initCodeClient({
           client_id: connector.CLIENT_ID,
@@ -390,6 +393,7 @@ function initGoogleConnector(connector) {
                     connector.canPush = connector.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
                     gapi.client.setToken(tokenResponse);
                     const cookieSuffix = this.user && this.user.substring(0, this.user.indexOf('@'));
+
                     setCookie(`g_connector_oauth_${cookieSuffix}`, JSON.stringify(tokenResponse), 90);
                   }
                 });
