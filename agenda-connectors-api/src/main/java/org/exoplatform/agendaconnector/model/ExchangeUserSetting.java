@@ -28,4 +28,6 @@ public class ExchangeUserSetting {
   private String username;
 
   private String password;
+
+  private boolean credentialChecked;
 }

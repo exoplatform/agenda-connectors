@@ -31,6 +31,9 @@
     <addon.exo.agenda.version>1.3.x-SNAPSHOT</addon.exo.agenda.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
+
+    <com.microsoft.ews.version>2.0</com.microsoft.ews.version>
+    <javax.xml.ws.version>2.3.1</javax.xml.ws.version>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -88,6 +91,18 @@
         <version>${project.version}</version>
         <scope>provided</scope>
         <type>zip</type>
+      </dependency>
+      <dependency>
+        <groupId>javax.xml.ws</groupId>
+        <artifactId>jaxws-api</artifactId>
+        <scope>provided</scope>
+        <version>${javax.xml.ws.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.microsoft.ews-java-api</groupId>
+        <artifactId>ews-java-api</artifactId>
+        <version>${com.microsoft.ews.version}</version>
+        <scope>provided</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>

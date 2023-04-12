@@ -17,7 +17,14 @@
 package org.exoplatform.agendaconnector.utils;
 
 import java.net.URI;
+import java.time.ZonedDateTime;
 
+import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
+import microsoft.exchange.webservices.data.core.enumeration.search.LogicalOperator;
+import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
+import microsoft.exchange.webservices.data.search.ItemView;
+import microsoft.exchange.webservices.data.search.filter.SearchFilter;
+import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.commons.api.settings.data.Scope;
 import org.exoplatform.commons.utils.CommonsUtils;
@@ -37,7 +44,9 @@ import microsoft.exchange.webservices.data.credential.WebCredentials;
 
 public class ExchangeConnectorUtils {
 
-  private static final Log   LOG                              = ExoLogger.getLogger(ExchangeConnectorUtils.class);
+  public static final String EXCHANGE_CREDENTIAL_CHECKED = "ExchangeCredentialChecked";
+
+  private static final Log LOG = ExoLogger.getLogger(ExchangeConnectorUtils.class);
 
   public static final Scope  EXCHANGE_CONNECTOR_SETTING_SCOPE = Scope.APPLICATION.id("ExchangeAgendaConnector");
 
@@ -95,7 +104,35 @@ public class ExchangeConnectorUtils {
     ExchangeCredentials credentials = new WebCredentials(exchangeUsername, exchangePassword);
     exchangeService.setCredentials(credentials);
     exchangeService.setUrl(new URI(exchangeServerURL + ExchangeConnectorUtils.EWS_URL));
-    exchangeService.getInboxRules();
+    if (!exchangeUserSetting.isCredentialChecked()) {
+      checkConnection(exchangeService);
+      exchangeUserSetting.setCredentialChecked(true);
+    }
     return exchangeService;
+  }
+
+  private static void checkConnection(ExchangeService exchangeService) throws Exception {
+    //this function will verify if settings entered by user are functionnal
+
+    ItemView view = new ItemView(100);
+
+    ZonedDateTime startZonedDateTime = ZonedDateTime.now();
+    SearchFilter exchangeStartSearchFilter =
+        new SearchFilter.IsGreaterThanOrEqualTo(AppointmentSchema.Start,
+                                                AgendaDateUtils.toDate(startZonedDateTime));
+    ZonedDateTime endZonedDatetime = ZonedDateTime.now().plusDays(1);
+    SearchFilter exchangeEndSearchFilter = new SearchFilter.IsLessThanOrEqualTo(AppointmentSchema.End,
+                                                                                AgendaDateUtils.toDate(endZonedDatetime));
+
+    SearchFilter exchangeEventsSearchFilter = new SearchFilter.SearchFilterCollection(LogicalOperator.And,
+                                                                                      exchangeStartSearchFilter,
+                                                                                      exchangeEndSearchFilter);
+
+    exchangeService.findItems(WellKnownFolderName.Calendar,
+                              exchangeEventsSearchFilter,
+                              view);
+
+
+
   }
 }
