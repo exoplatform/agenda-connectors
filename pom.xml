@@ -26,9 +26,9 @@
   </scm>
   <properties>
     <!-- 3rd party libraries versions -->
-    <org.exoplatform.social.version>6.5.x-exo-SNAPSHOT</org.exoplatform.social.version>
-    <org.exoplatform.platform-ui.version>6.5.x-exo-SNAPSHOT</org.exoplatform.platform-ui.version>
-    <addon.exo.agenda.version>1.4.x-SNAPSHOT</addon.exo.agenda.version>
+    <org.exoplatform.social.version>6.5.0-exo-20230412</org.exoplatform.social.version>
+    <org.exoplatform.platform-ui.version>6.5.0-exo-20230412</org.exoplatform.platform-ui.version>
+    <addon.exo.agenda.version>1.4.0-20230412</addon.exo.agenda.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
 
