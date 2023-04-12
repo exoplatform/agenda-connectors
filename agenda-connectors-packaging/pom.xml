@@ -26,6 +26,10 @@
       <scope>provided</scope>
       <type>war</type>
     </dependency>
+    <dependency>
+      <groupId>javax.xml.ws</groupId>
+      <artifactId>jaxws-api</artifactId>
+    </dependency>
   </dependencies>
   <build>
     <finalName>agenda-connectors-addon</finalName>
