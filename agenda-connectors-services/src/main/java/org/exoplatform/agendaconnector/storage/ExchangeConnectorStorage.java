@@ -46,6 +46,9 @@ public class ExchangeConnectorStorage {
                             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
                             ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY,
                             SettingValue.create(encodedPassword));
+    this.settingService.set(Context.USER.id(String.valueOf(userIdentityId)),
+                            ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+                            ExchangeConnectorUtils.EXCHANGE_CREDENTIAL_CHECKED,SettingValue.create(exchangeUserSetting.isCredentialChecked()));
   }
 
   public ExchangeUserSetting getExchangeSetting(long userIdentityId) {
@@ -56,6 +59,10 @@ public class ExchangeConnectorStorage {
     SettingValue<?> password = this.settingService.get(Context.USER.id(String.valueOf(userIdentityId)),
             ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
             ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
+    SettingValue<?> credentialChecked = this.settingService.get(Context.USER.id(String.valueOf(userIdentityId)),
+                                                       ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+                                                       ExchangeConnectorUtils.EXCHANGE_CREDENTIAL_CHECKED);
+
 
     ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
     if (username != null) {
@@ -64,6 +71,11 @@ public class ExchangeConnectorStorage {
     if (username != null) {
       String decodePassword = ExchangeConnectorUtils.decode((String) password.getValue());
       exchangeUserSetting.setPassword(decodePassword);
+    }
+    if(credentialChecked!=null) {
+      exchangeUserSetting.setCredentialChecked((boolean) credentialChecked.getValue());
+    } else {
+      exchangeUserSetting.setCredentialChecked(false);
     }
     return exchangeUserSetting;
   }
@@ -76,6 +88,9 @@ public class ExchangeConnectorStorage {
     this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
                                ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
                                ExchangeConnectorUtils.EXCHANGE_PASSWORD_KEY);
+    this.settingService.remove(Context.USER.id(String.valueOf(userIdentityId)),
+                               ExchangeConnectorUtils.EXCHANGE_CONNECTOR_SETTING_SCOPE,
+                               ExchangeConnectorUtils.EXCHANGE_CREDENTIAL_CHECKED);
   }
 
   public  void deleteRemoteEvent(long eventId, long userIdentityId){

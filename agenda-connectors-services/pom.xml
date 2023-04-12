@@ -9,7 +9,6 @@
   <name>eXo Agenda Connectors - Services</name>
   <properties>
     <exo.test.coverage.ratio>0.3</exo.test.coverage.ratio>
-    <com.microsoft.ews.version>2.0</com.microsoft.ews.version>
   </properties>
   <dependencies>
     <dependency>
@@ -46,8 +45,10 @@
     <dependency>
       <groupId>com.microsoft.ews-java-api</groupId>
       <artifactId>ews-java-api</artifactId>
-      <version>${com.microsoft.ews.version}</version>
-      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>javax.xml.ws</groupId>
+      <artifactId>jaxws-api</artifactId>
     </dependency>
     <!-- Test -->
     <dependency>
