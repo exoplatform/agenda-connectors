@@ -3,9 +3,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <artifactId>addons-parent-pom</artifactId>
+    <artifactId>addons-exo-parent-pom</artifactId>
     <groupId>org.exoplatform.addons</groupId>
-    <version>17-exo-M01</version>
+    <version>17-M01</version>
   </parent>
   <groupId>org.exoplatform.addons.agenda-connectors</groupId>
   <artifactId>agenda-connectors-parent</artifactId>
@@ -26,8 +26,6 @@
   </scm>
   <properties>
     <!-- 3rd party libraries versions -->
-    <org.exoplatform.social.version>6.5.x-exo-SNAPSHOT</org.exoplatform.social.version>
-    <org.exoplatform.platform-ui.version>6.5.x-exo-SNAPSHOT</org.exoplatform.platform-ui.version>
     <addon.exo.agenda.version>1.4.x-SNAPSHOT</addon.exo.agenda.version>
     <!-- Sonar properties -->
     <sonar.organization>exoplatform</sonar.organization>
@@ -37,23 +35,6 @@
   </properties>
   <dependencyManagement>
     <dependencies>
-      <!-- Import versions from platform project -->
-      <dependency>
-        <groupId>org.exoplatform.social</groupId>
-        <artifactId>social</artifactId>
-        <version>${org.exoplatform.social.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-      <!-- Import versions from platform-ui project -->
-      <dependency>
-        <groupId>org.exoplatform.platform-ui</groupId>
-        <artifactId>platform-ui</artifactId>
-        <version>${org.exoplatform.platform-ui.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-	  <!-- Import versions from platform-ui project -->
       <dependency>
         <groupId>org.exoplatform.agenda</groupId>
         <artifactId>agenda-parent</artifactId>
