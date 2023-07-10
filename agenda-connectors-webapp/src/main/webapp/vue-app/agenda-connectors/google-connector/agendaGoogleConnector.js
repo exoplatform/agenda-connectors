@@ -23,7 +23,6 @@ export default {
   isOauth: true,
   mandatorySecretKey: true,
   CLIENT_ID: null,
-  SECRET_KEY: null,
   DISCOVERY_DOCS: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
   SCOPE_WRITE: 'https://www.googleapis.com/auth/calendar.events',
   canConnect: true,
@@ -32,12 +31,11 @@ export default {
   isSignedIn: false,
   pushing: false,
   rank: 10,
-  init(connectionStatusChangedCallback, loadingCallback, apiKey, secretKey) {
-    if (!apiKey || !secretKey) {
-      throw new Error('Google connector can\'t be enabled with empty Client API Key or empty Client Secret Key.');
+  init(connectionStatusChangedCallback, loadingCallback, apiKey) {
+    if (!apiKey) {
+      throw new Error('Google connector can\'t be enabled with empty Client API Key.');
     }
     this.CLIENT_ID = apiKey;
-    this.SECRET_KEY = secretKey;
     // Already initialized
     if (this.initialized) {
       return;
@@ -53,7 +51,7 @@ export default {
       try {
         this.codeClient.callback = (response) => {
           if (response && response.code) {
-            return getToken(this.CLIENT_ID, this.SECRET_KEY, response.code, window.location.origin)
+            return requestToken(response.code, response.scope, window.location.origin)
               .then(tokenResponse => {
                 if (tokenResponse && tokenResponse.access_token) {
                   this.gapi.client.setToken(tokenResponse);
@@ -62,29 +60,27 @@ export default {
               });
           }
         };
-        const cookieSuffix = this.user && this.user.substring(0, this.user.indexOf('@'));
-        const tokenResponse = getCookie(`g_connector_oauth_${cookieSuffix}`);
-        if (tokenResponse) {
-          setCookie(`g_connector_oauth_${cookieSuffix}`, tokenResponse, 90);
-          const g_stateCookie = getCookie('g_state');
-          setCookie('g_state', g_stateCookie, 90);
-        }
-        if (refresh && tokenResponse) {
-          const response = JSON.parse(tokenResponse);
-          return refreshToken(this.CLIENT_ID, this.SECRET_KEY, response.refresh_token)
-            .then(refreshTokenResponse => {
-              if (refreshTokenResponse && refreshTokenResponse.access_token) {
-                response.access_token = refreshTokenResponse.access_token;
-                setCookie(`g_connector_oauth_${cookieSuffix}`, JSON.stringify(response), 90);
-                this.gapi.client.setToken(response);
-                this.canPush = this.cientOauth.hasGrantedAllScopes(response, this.SCOPE_WRITE);
-                resolve(response);
-              }
-            });
-        } else if (tokenResponse && this.user) {
-          const response = JSON.parse(tokenResponse);
-          this.gapi.client.setToken(response);
-          resolve(response);
+        if (refresh) {
+          return refreshToken().then(refreshTokenResponse => {
+            if (refreshTokenResponse && refreshTokenResponse.access_token) {
+              this.gapi.client.setToken(refreshTokenResponse);
+              this.canPush = this.cientOauth.hasGrantedAllScopes(refreshTokenResponse, this.SCOPE_WRITE);
+              resolve(refreshTokenResponse);
+            }
+          });
+        } else if (this.user) {
+          return getStoredToken().then(tokenResponse => {
+            if (tokenResponse && tokenResponse.access_token) {
+              this.gapi.client.setToken(tokenResponse);
+              this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+              this.gapi.client.setToken(tokenResponse);
+              resolve(tokenResponse);
+            }
+          }).catch((error) => {
+            if (error.status === 404) {
+              this.codeClient.requestCode();
+            }
+          });
         } else {
           this.codeClient.requestCode();
         }
@@ -123,9 +119,6 @@ export default {
             return new Promise((resolve, reject) => {
               if (this.credential) {
                 const userEmail = this.credential.email;
-                const cookieSuffix = userEmail.substring(0, userEmail.indexOf('@'));
-
-                setCookie(`g_connector_oauth_${cookieSuffix}`, JSON.stringify(tokenResponse), 90);
                 resolve(userEmail);
               } else {
                 reject();
@@ -148,17 +141,17 @@ export default {
   },
   disconnect() {
     this.loadingCallback(this, true);
-    if (this.gapi.client.getToken() && this.cientOauth || this.user) {
-      this.cientOauth.revoke(this.gapi.client.getToken());
-      this.gapi.client.setToken('');
-      if (this.user) {
-        this.identity.revoke(this.user);
-        this.identity.disableAutoSelect();
+    return removeToken().then(() => {
+      if (this.gapi.client.getToken() && this.cientOauth || this.user) {
+        this.cientOauth.revoke(this.gapi.client.getToken());
+        this.gapi.client.setToken('');
+        if (this.user) {
+          this.identity.revoke(this.user);
+          this.identity.disableAutoSelect();
+        }
       }
-      return Promise.resolve(true);
-    } else {
-      return Promise.resolve(null);
-    }
+    });
+
   },
   getEvents(periodStartDate, periodEndDate) {
     if (this.gapi && this.gapi.client && this.gapi.client.calendar) {
@@ -273,40 +266,25 @@ function retrieveEvents(connector, periodStartDate, periodEndDate) {
   });
 }
 
-function setCookie(name, value, days) {
-  const date = new Date();
-  date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-  const expires = `expires=${date.toUTCString()}`;
-  document.cookie = `${name}=${value};${expires};path=/`;
-}
-
 function deleteCookie(name) {
   document.cookie = `${name}=; Max-Age=0; path=/`;
 }
 
-function getCookie(cname) {
-  const name = `${cname}=`;
-  const decodedCookie = decodeURIComponent(document.cookie);
-  const ca = decodedCookie.split(';');
-  for (const value of ca) {
-    let c = value;
-    while (c.charAt(0) === ' ') {
-      c = c.substring(1);
+function removeToken() {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/gconnector/token`, {
+    credentials: 'include',
+    method: 'DELETE'
+  }).then((resp) => {
+    if (resp && !resp.ok) {
+      throw new Error('Error while removing stored token');
     }
-    if (c.indexOf(name) === 0) {
-      return c.substring(name.length, c.length);
-    }
-  }
-  return '';
+  });
 }
 
-function refreshToken(clientId, clientSecret, refreshToken) {
+function refreshToken() {
   const formData = new FormData();
-  formData.append('client_id', encodeURIComponent(clientId));
-  formData.append('client_secret', encodeURIComponent(clientSecret));
-  formData.append('refresh_token', refreshToken);
-  formData.append('grant_type', 'refresh_token');
-  return fetch('https://oauth2.googleapis.com/token', {
+  formData.append('grantType', 'refresh_token');
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/gconnector/refreshaccess`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -321,14 +299,25 @@ function refreshToken(clientId, clientSecret, refreshToken) {
   });
 }
 
-function getToken(clientId, clientSecret, code, redirect_uri) {
+function getStoredToken() {
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/gconnector/token`, {
+    method: 'GET',
+    credentials: 'include',
+  }).then((resp) => {
+    if (!resp?.ok) {
+      throw resp;
+    } else {
+      return resp.json();
+    }
+  });
+}
+function requestToken(code, scopes, redirect_uri) {
   const formData = new FormData();
-  formData.append('client_id', encodeURIComponent(clientId));
-  formData.append('client_secret', encodeURIComponent(clientSecret));
-  formData.append('code', code);
-  formData.append('grant_type', 'authorization_code');
-  formData.append('redirect_uri', redirect_uri);
-  return fetch('https://oauth2.googleapis.com/token', {
+  formData.append('code',code);
+  formData.append('scopes',scopes);
+  formData.append('grantType', 'authorization_code');
+  formData.append('redirectUri', redirect_uri);
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/gconnector/oauth2callback`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -336,9 +325,17 @@ function getToken(clientId, clientSecret, code, redirect_uri) {
     body: new URLSearchParams(formData).toString(),
   }).then((resp) => {
     if (!resp || !resp.ok) {
-      throw new Error('Error while getting access token');
+      throw new Error('Error while requesting access token');
     } else {
       return resp.json();
+    }
+  });
+}
+
+function checkUserStatus(connector) {
+  getStoredToken().then(token => {
+    if (connector.user && token?.access_token) {
+      connector.isSignedIn = true;
     }
   });
 }
@@ -357,6 +354,7 @@ function initGoogleConnector(connector) {
     connector.identity = google.accounts.id;
     connector.identity.initialize({
       client_id: connector.CLIENT_ID,
+      select_by: 'user',
       callback: (credResponse) => {
         if (credResponse && credResponse.credential) {
           const credential = jwt_decode(credResponse.credential);
@@ -376,29 +374,12 @@ function initGoogleConnector(connector) {
       gapi.client.init({
         discoveryDocs: connector.DISCOVERY_DOCS,
       }).then(function () {
-        const cookie = getCookie('g_state');
-        if (cookie && !JSON.parse(cookie).i_t) {
-          connector.isSignedIn = true;
-        }
+        checkUserStatus(connector);
         connector.cientOauth = google.accounts.oauth2;
         connector.codeClient = connector.cientOauth.initCodeClient({
           client_id: connector.CLIENT_ID,
           scope: connector.SCOPE_WRITE,
           ux_mode: 'popup',
-          callback: (response) => {
-            if (response && response.code) {
-              getToken(connector.CLIENT_ID, connector.SECRET_KEY, response.code, window.location.origin)
-                .then(tokenResponse => {
-                  if (tokenResponse && tokenResponse.access_token) {
-                    connector.canPush = connector.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-                    gapi.client.setToken(tokenResponse);
-                    const cookieSuffix = this.user && this.user.substring(0, this.user.indexOf('@'));
-
-                    setCookie(`g_connector_oauth_${cookieSuffix}`, JSON.stringify(tokenResponse), 90);
-                  }
-                });
-            }
-          },
           error_callback: (error) => {
             connector.loadingCallback(connector, false);
             connector.connectionStatusChangedCallback(connector, false, error);
