@@ -283,7 +283,7 @@ function removeToken() {
 
 function refreshToken() {
   const formData = new FormData();
-  formData.append('grant_type', 'refresh_token');
+  formData.append('grantType', 'refresh_token');
   return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/gconnector/refreshaccess`, {
     method: 'POST',
     headers: {
