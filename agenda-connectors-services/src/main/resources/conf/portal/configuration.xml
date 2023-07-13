@@ -27,4 +27,11 @@
   <component>
     <type>org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage</type>
   </component>
+  <component>
+    <type>org.exoplatform.agendaconnector.rest.GoogleConnectorRest</type>
+  </component>
+  <component>
+    <key>org.exoplatform.agendaconnector.service.GoogleConnectorService</key>
+    <type>org.exoplatform.agendaconnector.service.GoogleConnectorServiceImpl</type>
+  </component>
 </configuration>
