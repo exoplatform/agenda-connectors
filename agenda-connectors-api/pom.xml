@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.exoplatform.addons.agenda-connectors</groupId>
     <artifactId>agenda-connectors-parent</artifactId>
-    <version>1.2.0-20230727</version>
+    <version>1.2.x-SNAPSHOT</version>
   </parent>
   <artifactId>agenda-connectors-api</artifactId>
   <name>eXo Agenda Connectors - API</name>
