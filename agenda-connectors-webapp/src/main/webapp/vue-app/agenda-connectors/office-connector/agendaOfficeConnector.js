@@ -84,7 +84,7 @@ export default {
     return this.officeApi.loginPopup(this.loginRequest)
       .then(loginResponse => getTokenPopup(this, loginResponse))
       .then(tokenObject => {
-        const username = tokenObject && tokenObject.account && tokenObject.account.username;
+        const username = tokenObject?.account?.username;
         this.user = username;
         this.canPush = askWriteAccess;
 
@@ -195,6 +195,7 @@ function initOfficeConnector(connector) {
         redirectUri: window.location.origin,
         account: currentUser.username,
         scopes: connector.CALENDAR_WRITE_SCOPE,
+        forceRefresh: true,
       };
 
       return officeApi.acquireTokenSilent(request)
