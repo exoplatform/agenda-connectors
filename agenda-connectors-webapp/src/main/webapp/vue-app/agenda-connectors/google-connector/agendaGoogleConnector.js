@@ -336,6 +336,7 @@ function checkUserStatus(connector) {
   getStoredToken().then(token => {
     if (connector.user && token?.access_token) {
       connector.isSignedIn = true;
+      connector.canPush = connector.cientOauth.hasGrantedAllScopes(token, connector.SCOPE_WRITE);
     }
   });
 }
