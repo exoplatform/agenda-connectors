@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <gatein-resources xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.exoplatform.org/xml/ns/gatein_resources_1_4 http://www.exoplatform.org/xml/ns/gatein_resources_1_4" xmlns="http://www.exoplatform.org/xml/ns/gatein_resources_1_4">
-  <portal-skin>
-    <skin-name>Enterprise</skin-name>
-    <css-path>/skin/css/agenda-connectors.css</css-path>
-    <css-priority>10</css-priority>
-  </portal-skin>
   <module>
     <name>AgendaConnectorsExtensions</name>
     <load-group>AgendaConnectorsGRP</load-group>
