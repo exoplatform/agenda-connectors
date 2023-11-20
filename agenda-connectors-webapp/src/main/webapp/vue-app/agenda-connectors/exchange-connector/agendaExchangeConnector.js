@@ -29,7 +29,7 @@ export default {
   connect(askWriteAccess) {
     if (askWriteAccess) {
       return new Promise((resolve, reject) => {
-        document.dispatchEvent(new CustomEvent('open-connector-settings-drawer'));
+        document.dispatchEvent(new CustomEvent('open-exchange-connector-settings-drawer'));
         document.addEventListener('test-connection', (settings) => {
           if (settings.detail) {
             resolve(settings.detail.username);
