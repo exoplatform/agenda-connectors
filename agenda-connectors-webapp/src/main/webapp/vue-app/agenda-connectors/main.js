@@ -39,7 +39,6 @@ const url = `${eXo.env.portal.context}/${eXo.env.portal.rest}/i18n/bundle/locale
 
 const vuetify = new Vuetify(eXo.env.portal.vuetifyPreset);
 
-const appId = 'AgendaConnectorsApplication';
 
 // get overridden components if exists
 if (extensionRegistry) {
@@ -51,13 +50,17 @@ if (extensionRegistry) {
   }
 }
 
-exoi18n.loadLanguageAsync(lang, url).then(i18n => {
-  // init Vue app when locale resources are ready
-  Vue.createApp({
-    template: `<agenda-connectors id="${appId}" />`,
-    vuetify,
-    i18n
-  }, `#${appId}`, 'Agenda Connectors Settings');
+exoi18n.loadLanguageAsync(lang, url);
+document.addEventListener('open-exchange-connector-settings-drawer',function() {
+  const appId = 'agendaConnectorSettingsDrawer';
+  const appElement = document.getElementById(appId);
+  appElement.appendChild(document.createElement('div'));
+  exoi18n.loadLanguageAsync(lang, url).then(i18n => {
+    Vue.createApp({
+      template: '<agenda-connectors />',
+      vuetify,
+      i18n
+    }, `#${appId}>div`, 'Agenda Connectors Settings');
+  });
 });
 
-Vue.use(Vuetify);

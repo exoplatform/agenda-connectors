@@ -24,8 +24,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 <script>
 
 export default {
-  created() {
-    document.addEventListener('open-connector-settings-drawer',this.openDrawer);
+  mounted() {
+    this.openDrawer();
   },
   methods: {
     openDrawer() {
