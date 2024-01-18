@@ -72,8 +72,8 @@ public class ExchangeConnectorStorage {
       String decodePassword = ExchangeConnectorUtils.decode((String) password.getValue());
       exchangeUserSetting.setPassword(decodePassword);
     }
-    if(credentialChecked!=null) {
-      exchangeUserSetting.setCredentialChecked((boolean) credentialChecked.getValue());
+    if (credentialChecked != null) {
+      exchangeUserSetting.setCredentialChecked(Boolean.valueOf(String.valueOf(credentialChecked.getValue())));
     } else {
       exchangeUserSetting.setCredentialChecked(false);
     }
