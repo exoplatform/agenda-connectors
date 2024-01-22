@@ -13,6 +13,8 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 
+import org.exoplatform.agenda.model.Event;
+import org.exoplatform.agenda.service.AgendaEventService;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -49,13 +51,18 @@ public class ExchangeConnectorServiceImplTest {
   
   private ExchangeConnectorStorage exchangeConnectorStorage;
 
+  private AgendaEventService       agendaEventService;
+
   @Before
   public void setUp() throws Exception {
     agendaRemoteEventService = mock(AgendaRemoteEventService.class);
     exchangeConnectorStorage = mock(ExchangeConnectorStorage.class);
+    agendaEventService = mock(AgendaEventService.class);
     exchangeService = PowerMockito.mock(ExchangeService.class);
     PowerMockito.whenNew(ExchangeService.class).withArguments(any()).thenReturn(exchangeService);
-    exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage, agendaRemoteEventService);
+    exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage,
+                                                                agendaRemoteEventService,
+                                                                agendaEventService);
   }
   
   @Test
@@ -104,6 +111,8 @@ public class ExchangeConnectorServiceImplTest {
     eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
     eventEntity.setRemoteProviderId(1);
     eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
+    Event event = new Event();
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
     exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
 
     // Then
@@ -141,7 +150,6 @@ public class ExchangeConnectorServiceImplTest {
     eventEntity.setRemoteProviderId(1);
     eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
     exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    
     // Then
     verify(appointment, times(1)).update(any(), any());
   }
