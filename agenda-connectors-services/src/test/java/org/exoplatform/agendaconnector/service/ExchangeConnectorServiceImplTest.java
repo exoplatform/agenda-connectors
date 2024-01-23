@@ -11,8 +11,15 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Collections;
 import java.util.List;
 
+import org.apache.ecs.html.Col;
+import org.exoplatform.agenda.constant.EventRecurrenceFrequency;
+import org.exoplatform.agenda.constant.EventRecurrenceType;
+import org.exoplatform.agenda.model.Event;
+import org.exoplatform.agenda.model.EventRecurrence;
+import org.exoplatform.agenda.service.AgendaEventService;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -49,13 +56,18 @@ public class ExchangeConnectorServiceImplTest {
   
   private ExchangeConnectorStorage exchangeConnectorStorage;
 
+  private AgendaEventService       agendaEventService;
+
   @Before
   public void setUp() throws Exception {
     agendaRemoteEventService = mock(AgendaRemoteEventService.class);
     exchangeConnectorStorage = mock(ExchangeConnectorStorage.class);
+    agendaEventService = mock(AgendaEventService.class);
     exchangeService = PowerMockito.mock(ExchangeService.class);
     PowerMockito.whenNew(ExchangeService.class).withArguments(any()).thenReturn(exchangeService);
-    exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage, agendaRemoteEventService);
+    exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage,
+                                                                agendaRemoteEventService,
+                                                                agendaEventService);
   }
   
   @Test
@@ -104,10 +116,71 @@ public class ExchangeConnectorServiceImplTest {
     eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
     eventEntity.setRemoteProviderId(1);
     eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
+    Event event = new Event();
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
     exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-
-    // Then
     verify(agendaRemoteEventService, times(1)).saveRemoteEvent(any());
+    EventRecurrence eventRecurrence = new EventRecurrence();
+    eventRecurrence.setType(EventRecurrenceType.DAILY);
+    eventRecurrence.setOverallStart(ZonedDateTime.now());
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(2)).saveRemoteEvent(any());
+
+    eventRecurrence.setType(EventRecurrenceType.WEEK_DAYS);
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(3)).saveRemoteEvent(any());
+
+    eventRecurrence.setType(EventRecurrenceType.WEEKLY);
+    eventRecurrence.setByDay(Collections.singletonList("WE"));
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(4)).saveRemoteEvent(any());
+
+    eventRecurrence.setType(EventRecurrenceType.MONTHLY);
+    eventRecurrence.setByMonth(Collections.singletonList("1"));
+    eventRecurrence.setByMonthDay(Collections.singletonList("1"));
+    eventRecurrence.setInterval(1);
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(5)).saveRemoteEvent(any());
+
+    eventRecurrence.setType(EventRecurrenceType.YEARLY);
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(6)).saveRemoteEvent(any());
+
+    eventRecurrence.setType(EventRecurrenceType.CUSTOM);
+
+    eventRecurrence.setFrequency(EventRecurrenceFrequency.YEARLY);
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(7)).saveRemoteEvent(any());
+
+    eventRecurrence.setFrequency(EventRecurrenceFrequency.MONTHLY);
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(8)).saveRemoteEvent(any());
+
+    eventRecurrence.setFrequency(EventRecurrenceFrequency.WEEKLY);
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(9)).saveRemoteEvent(any());
+
+    eventRecurrence.setFrequency(EventRecurrenceFrequency.DAILY);
+    event.setRecurrence(eventRecurrence);
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    verify(agendaRemoteEventService, times(10)).saveRemoteEvent(any());
   }
 
   @Test
@@ -140,8 +213,9 @@ public class ExchangeConnectorServiceImplTest {
     eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
     eventEntity.setRemoteProviderId(1);
     eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
+    Event event = new Event();
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
     exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    
     // Then
     verify(appointment, times(1)).update(any(), any());
   }
