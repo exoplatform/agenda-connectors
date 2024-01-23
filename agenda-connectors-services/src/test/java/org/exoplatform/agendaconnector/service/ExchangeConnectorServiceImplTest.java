@@ -213,6 +213,8 @@ public class ExchangeConnectorServiceImplTest {
     eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
     eventEntity.setRemoteProviderId(1);
     eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
+    Event event = new Event();
+    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
     exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
     // Then
     verify(appointment, times(1)).update(any(), any());
