@@ -205,6 +205,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         ZonedDateTime endDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getEnd(), userTimeZone);
         appointment.setStart(AgendaDateUtils.toDate(startDate));
         appointment.setEnd(AgendaDateUtils.toDate(endDate));
+        appointment.setRecurrence(getEventRecurrence(event.getId()));
         appointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy);
       }
     } catch (ServiceLocalException e) {
