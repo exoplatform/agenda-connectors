@@ -18,14 +18,19 @@ package org.exoplatform.agendaconnector.service;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.time.format.TextStyle;
+import java.util.*;
 
+import microsoft.exchange.webservices.data.core.enumeration.property.time.DayOfTheWeek;
+import microsoft.exchange.webservices.data.core.enumeration.property.time.Month;
+import microsoft.exchange.webservices.data.core.exception.misc.ArgumentOutOfRangeException;
+import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence;
+import org.apache.commons.lang3.StringUtils;
+import org.exoplatform.agenda.model.Event;
+import org.exoplatform.agenda.model.EventRecurrence;
 import org.exoplatform.agenda.model.RemoteEvent;
 import org.exoplatform.agenda.rest.model.EventEntity;
+import org.exoplatform.agenda.service.AgendaEventService;
 import org.exoplatform.agenda.service.AgendaRemoteEventService;
 import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
@@ -58,13 +63,17 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
 
   private AgendaRemoteEventService agendaRemoteEventService;
 
+  private AgendaEventService       agendaEventService;
+
   private static final Log LOG = ExoLogger.getLogger(ExchangeConnectorServiceImpl.class);
 
 
   public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage,
-                                      AgendaRemoteEventService agendaRemoteEventService) {
+                                      AgendaRemoteEventService agendaRemoteEventService,
+                                      AgendaEventService agendaEventService) {
     this.exchangeConnectorStorage = exchangeConnectorStorage;
     this.agendaRemoteEventService = agendaRemoteEventService;
+    this.agendaEventService = agendaEventService;
   }
 
   @Override
@@ -179,6 +188,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         ZonedDateTime endDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getEnd(), userTimeZone);
         appointment.setStart(AgendaDateUtils.toDate(startDate));
         appointment.setEnd(AgendaDateUtils.toDate(endDate));
+        appointment.setRecurrence(getEventRecurrence(event.getId()));
         appointment.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
         remoteEvent = new RemoteEvent();
         remoteEvent.setIdentityId(userIdentityId);
@@ -195,6 +205,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         ZonedDateTime endDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getEnd(), userTimeZone);
         appointment.setStart(AgendaDateUtils.toDate(startDate));
         appointment.setEnd(AgendaDateUtils.toDate(endDate));
+        appointment.setRecurrence(getEventRecurrence(event.getId()));
         appointment.update(ConflictResolutionMode.AlwaysOverwrite, SendInvitationsOrCancellationsMode.SendToAllAndSaveCopy);
       }
     } catch (ServiceLocalException e) {
@@ -223,5 +234,92 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       LOG.error("User {} is not allowed to connect to exchange server",userIdentityId,e);
       throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
+  }
+
+  private Recurrence getEventRecurrence(long eventId) throws ArgumentOutOfRangeException {
+    Event event = agendaEventService.getEventById(eventId);
+    EventRecurrence eventRecurrence = event.getRecurrence();
+    if (eventRecurrence == null) {
+      return null;
+    }
+    ZonedDateTime startDate = eventRecurrence.getOverallStart();
+    Recurrence recurrence;
+    switch (eventRecurrence.getType()) {
+    case DAILY:
+      recurrence = new Recurrence.DailyPattern();
+      recurrence.setStartDate(AgendaDateUtils.toDate(startDate));
+      break;
+    case WEEKLY:
+      DayOfTheWeek day =
+                       DayOfTheWeek.valueOf(StringUtils.capitalize(AgendaDateUtils.getDayNameFromDayAbbreviation(eventRecurrence.getByDay())));
+      recurrence = new Recurrence.WeeklyPattern(AgendaDateUtils.toDate(startDate), 1, day);
+      break;
+    case WEEK_DAYS:
+      recurrence = new Recurrence.WeeklyPattern(AgendaDateUtils.toDate(startDate),
+                                                1,
+                                                DayOfTheWeek.Monday,
+                                                DayOfTheWeek.Tuesday,
+                                                DayOfTheWeek.Wednesday,
+                                                DayOfTheWeek.Thursday,
+                                                DayOfTheWeek.Friday);
+      break;
+    case MONTHLY:
+      recurrence = new Recurrence.MonthlyPattern(AgendaDateUtils.toDate(startDate),
+                                                 eventRecurrence.getInterval(),
+                                                 Integer.valueOf(eventRecurrence.getByMonthDay().get(0)));
+      break;
+    case YEARLY:
+      recurrence = new Recurrence.YearlyPattern(AgendaDateUtils.toDate(startDate),
+                                                Month.valueOf(java.time.Month.of(Integer.parseInt(eventRecurrence.getByMonth()
+                                                                                                                 .get(0)))
+                                                                             .getDisplayName(TextStyle.FULL, Locale.ENGLISH)),
+                                                Integer.valueOf(eventRecurrence.getByMonthDay().get(0)));
+      break;
+    case CUSTOM:
+      recurrence = getCustomEventRecurrence(eventRecurrence);
+      break;
+    default:
+      throw new IllegalStateException("Can't handle type: " + eventRecurrence.getType());
+    }
+    return recurrence;
+  }
+
+  private Recurrence getCustomEventRecurrence(EventRecurrence eventRecurrence) throws ArgumentOutOfRangeException {
+    Recurrence recurrence;
+    ZonedDateTime startDate = eventRecurrence.getOverallStart();
+    ZonedDateTime endDate = eventRecurrence.getOverallEnd();
+    switch (eventRecurrence.getFrequency()) {
+    case YEARLY:
+      recurrence = new Recurrence.YearlyPattern(AgendaDateUtils.toDate(startDate),
+                                                Month.valueOf(java.time.Month.of(Integer.parseInt(eventRecurrence.getByMonth()
+                                                                                                                 .get(0)))
+                                                                             .getDisplayName(TextStyle.FULL, Locale.ENGLISH)),
+                                                Integer.valueOf(eventRecurrence.getByMonthDay().get(0)));
+      break;
+    case MONTHLY:
+      recurrence = new Recurrence.MonthlyPattern(AgendaDateUtils.toDate(startDate),
+                                                 eventRecurrence.getInterval(),
+                                                 Integer.valueOf(eventRecurrence.getByMonthDay().get(0)));
+      break;
+    case WEEKLY:
+      List<DayOfTheWeek> weekDays =
+                                  eventRecurrence.getByDay()
+                                                 .stream()
+                                                 .map(day -> DayOfTheWeek.valueOf(StringUtils.capitalize(AgendaDateUtils.getDayNameFromDayAbbreviation(Collections.singletonList(day)))))
+                                                 .toList();
+      recurrence = new Recurrence.WeeklyPattern(AgendaDateUtils.toDate(startDate),
+                                                eventRecurrence.getInterval(),
+                                                weekDays.toArray(new DayOfTheWeek[weekDays.size()]));
+      recurrence.setStartDate(AgendaDateUtils.toDate(startDate));
+      recurrence.setEndDate(AgendaDateUtils.toDate(endDate));
+      break;
+    case DAILY:
+      recurrence = new Recurrence.DailyPattern();
+      recurrence.setStartDate(AgendaDateUtils.toDate(startDate));
+      break;
+    default:
+      throw new IllegalStateException("Can't handle type: " + eventRecurrence.getType());
+    }
+    return recurrence;
   }
 }
