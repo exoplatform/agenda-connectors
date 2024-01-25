@@ -543,7 +543,14 @@ function buildConnectorEvent(event) {
       connectorEvent.recurrence.pattern.firstDayOfWeek = 'monday';
     }
     if (daysOfMonth) {
-      connectorEvent.recurrence.pattern.daysOfMonth = daysOfMonth;
+      if (recurrenceType === 'absoluteMonthly') {
+        connectorEvent.recurrence.pattern.dayOfMonth = daysOfMonth[0];
+      } else if (recurrenceType === 'absoluteYearly') {
+        connectorEvent.recurrence.pattern.dayOfMonth = daysOfMonth[0];
+        connectorEvent.recurrence.pattern.month = event.recurrence?.byMonth[0];
+      } else {
+        connectorEvent.recurrence.pattern.daysOfMonth = daysOfMonth;
+      }
     }
     if (event.recurrence.count) {
       connectorEvent.recurrence.range.numberOfOccurrences = event.recurrence.count;
