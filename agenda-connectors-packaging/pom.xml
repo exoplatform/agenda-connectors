@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.exoplatform.addons.agenda-connectors</groupId>
     <artifactId>agenda-connectors-parent</artifactId>
-    <version>1.3.x-SNAPSHOT</version>
+    <version>7.0.x-SNAPSHOT</version>
   </parent>
   <artifactId>agenda-connectors-packaging</artifactId>
   <packaging>pom</packaging>
