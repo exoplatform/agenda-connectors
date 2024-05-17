@@ -142,13 +142,5 @@
   </dependencies>
   <build>
     <finalName>agenda-connectors-services</finalName>
-    <plugins>
-      <plugin>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <argLine>@{argLine} ${env.MAVEN_OPTS} --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED  --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens java.xml/jdk.xml.internal=ALL-UNNAMED </argLine>
-        </configuration>
-      </plugin>
-    </plugins>
   </build>
 </project>
