@@ -114,7 +114,6 @@ export default {
       return this.authorize().then(tokenResponse => {
         if (tokenResponse && tokenResponse.access_token) {
           this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-          this.identity.prompt();
           return this.authenticate().then(() => {
             return new Promise((resolve, reject) => {
               if (this.credential) {
@@ -356,6 +355,7 @@ function initGoogleConnector(connector) {
     connector.identity.initialize({
       client_id: connector.CLIENT_ID,
       select_by: 'user',
+      use_fedcm_for_prompt: true,
       callback: (credResponse) => {
         if (credResponse && credResponse.credential) {
           const credential = jwt_decode(credResponse.credential);
