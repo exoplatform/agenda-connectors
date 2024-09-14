@@ -67,7 +67,7 @@ export const getExchangeEvents = (start, end) => {
     if (!resp || !resp.ok) {
       throw new Error('Response code indicates a server error', resp);
     } else {
-      return resp.json();
+      return resp.json() + '';
     }
   });
 };
