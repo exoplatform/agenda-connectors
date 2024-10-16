@@ -21,9 +21,11 @@ import java.time.ZonedDateTime;
 import java.time.format.TextStyle;
 import java.util.*;
 
+import microsoft.exchange.webservices.data.core.enumeration.property.BodyType;
 import microsoft.exchange.webservices.data.core.enumeration.property.time.DayOfTheWeek;
 import microsoft.exchange.webservices.data.core.enumeration.property.time.Month;
 import microsoft.exchange.webservices.data.core.exception.misc.ArgumentOutOfRangeException;
+import microsoft.exchange.webservices.data.property.complex.MessageBody;
 import microsoft.exchange.webservices.data.property.complex.recurrence.pattern.Recurrence;
 import org.apache.commons.lang3.StringUtils;
 import org.exoplatform.agenda.model.Event;
@@ -33,6 +35,7 @@ import org.exoplatform.agenda.rest.model.EventEntity;
 import org.exoplatform.agenda.service.AgendaEventService;
 import org.exoplatform.agenda.service.AgendaRemoteEventService;
 import org.exoplatform.agenda.util.AgendaDateUtils;
+import org.exoplatform.agenda.util.NotificationUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
 import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
@@ -59,13 +62,13 @@ import org.exoplatform.services.log.Log;
 
 public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
 
-  private ExchangeConnectorStorage exchangeConnectorStorage;
+  private ExchangeConnectorStorage     exchangeConnectorStorage;
 
-  private AgendaRemoteEventService agendaRemoteEventService;
+  private AgendaRemoteEventService     agendaRemoteEventService;
 
-  private AgendaEventService       agendaEventService;
+  private AgendaEventService           agendaEventService;
 
-  private static final Log LOG = ExoLogger.getLogger(ExchangeConnectorServiceImpl.class);
+  private static final Log             LOG = ExoLogger.getLogger(ExchangeConnectorServiceImpl.class);
 
 
   public ExchangeConnectorServiceImpl(ExchangeConnectorStorage exchangeConnectorStorage,
@@ -179,6 +182,7 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
   @Override
   public void pushEventToExchange(long userIdentityId, EventEntity event, ZoneId userTimeZone) throws IllegalAccessException {
     ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
+    Event eventOneXo = agendaEventService.getEventById(event.getId());
     try (ExchangeService exchangeService = ExchangeConnectorUtils.connectExchangeServer(exchangeUserSetting)) {
       RemoteEvent remoteEvent = agendaRemoteEventService.findRemoteEvent(event.getId(), userIdentityId);
       if (remoteEvent == null) {
@@ -188,6 +192,13 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         ZonedDateTime endDate = AgendaDateUtils.parseRFC3339ToZonedDateTime(event.getEnd(), userTimeZone);
         appointment.setStart(AgendaDateUtils.toDate(startDate));
         appointment.setEnd(AgendaDateUtils.toDate(endDate));
+        appointment.setLocation(event.getLocation());
+        appointment.setBody(new MessageBody(BodyType.HTML, event.getDescription()));
+        String webConferenceURL = NotificationUtils.getWebConferenceLink(eventOneXo);
+        if(StringUtils.isNotBlank(webConferenceURL)) {
+          appointment.setMeetingWorkspaceUrl(webConferenceURL);
+          appointment.setIsOnlineMeeting(true);
+        }
         appointment.setRecurrence(getEventRecurrence(event.getId()));
         appointment.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
         remoteEvent = new RemoteEvent();
