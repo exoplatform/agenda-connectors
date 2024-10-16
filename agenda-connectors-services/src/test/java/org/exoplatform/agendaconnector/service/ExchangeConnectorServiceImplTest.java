@@ -14,12 +14,12 @@ import java.time.ZonedDateTime;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.ecs.html.Col;
 import org.exoplatform.agenda.constant.EventRecurrenceFrequency;
 import org.exoplatform.agenda.constant.EventRecurrenceType;
 import org.exoplatform.agenda.model.Event;
 import org.exoplatform.agenda.model.EventRecurrence;
 import org.exoplatform.agenda.service.AgendaEventService;
+import org.exoplatform.agenda.util.NotificationUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -45,7 +45,7 @@ import microsoft.exchange.webservices.data.search.ItemView;
 import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({ ExchangeConnectorUtils.class, ExchangeService.class })
+@PrepareForTest({ ExchangeConnectorUtils.class, ExchangeService.class, NotificationUtils.class })
 public class ExchangeConnectorServiceImplTest {
 
   private ExchangeConnectorServiceImpl exchangeConnectorService;
@@ -68,6 +68,7 @@ public class ExchangeConnectorServiceImplTest {
     exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage,
                                                                 agendaRemoteEventService,
                                                                 agendaEventService);
+    PowerMockito.mockStatic(NotificationUtils.class);
   }
   
   @Test
@@ -103,7 +104,7 @@ public class ExchangeConnectorServiceImplTest {
     
     when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(null);
     when(exchangeService.getRequestedServerVersion()).thenReturn(ExchangeVersion.Exchange2010_SP2);
-    
+
     // When
     EventEntity eventEntity = new EventEntity();
     eventEntity.setId(1);

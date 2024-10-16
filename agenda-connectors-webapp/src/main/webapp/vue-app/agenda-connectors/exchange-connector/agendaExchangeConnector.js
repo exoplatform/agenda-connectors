@@ -67,6 +67,9 @@ export default {
     const exchangeEvent = {
       id: event.id,
       summary: event.summary,
+      description: event.description,
+      location: event.location,
+      conferences: event.conferences,
       start: event.start,
       end: event.end,
       remoteProviderName: this.name,
