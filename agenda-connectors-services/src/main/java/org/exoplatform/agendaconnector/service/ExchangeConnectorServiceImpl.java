@@ -197,7 +197,6 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
         String webConferenceURL = NotificationUtils.getWebConferenceLink(eventOneXo);
         if(StringUtils.isNotBlank(webConferenceURL)) {
           appointment.setMeetingWorkspaceUrl(webConferenceURL);
-          appointment.setIsOnlineMeeting(true);
         }
         appointment.setRecurrence(getEventRecurrence(event.getId()));
         appointment.save(new FolderId(WellKnownFolderName.Calendar), SendInvitationsMode.SendToAllAndSaveCopy);
