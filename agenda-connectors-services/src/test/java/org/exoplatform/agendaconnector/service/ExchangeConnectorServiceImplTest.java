@@ -5,6 +5,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,13 +24,12 @@ import org.exoplatform.agenda.model.Event;
 import org.exoplatform.agenda.model.EventRecurrence;
 import org.exoplatform.agenda.service.AgendaEventService;
 import org.exoplatform.agenda.util.NotificationUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
 
 import org.exoplatform.agenda.model.RemoteEvent;
 import org.exoplatform.agenda.rest.model.EventEntity;
@@ -36,7 +37,6 @@ import org.exoplatform.agenda.service.AgendaRemoteEventService;
 import org.exoplatform.agenda.util.AgendaDateUtils;
 import org.exoplatform.agendaconnector.model.ExchangeUserSetting;
 import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
-import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 
 import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion;
@@ -46,33 +46,34 @@ import microsoft.exchange.webservices.data.property.complex.ItemId;
 import microsoft.exchange.webservices.data.search.CalendarView;
 import microsoft.exchange.webservices.data.search.FindItemsResults;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({ ExchangeConnectorUtils.class, ExchangeService.class, NotificationUtils.class })
 public class ExchangeConnectorServiceImplTest {
 
-  private ExchangeConnectorServiceImpl exchangeConnectorService;
+  private ExchangeConnectorServiceImpl    exchangeConnectorService;
 
-  private AgendaRemoteEventService agendaRemoteEventService;
+  private AgendaRemoteEventService         agendaRemoteEventService;
 
-  private ExchangeService          exchangeService;
-  
-  private ExchangeConnectorStorage exchangeConnectorStorage;
+  private ExchangeConnectorStorage         exchangeConnectorStorage;
 
-  private AgendaEventService       agendaEventService;
+  private AgendaEventService               agendaEventService;
+
+  private MockedStatic<NotificationUtils>  notificationUtilsMockedStatic;
 
   @Before
   public void setUp() throws Exception {
     agendaRemoteEventService = mock(AgendaRemoteEventService.class);
     exchangeConnectorStorage = mock(ExchangeConnectorStorage.class);
     agendaEventService = mock(AgendaEventService.class);
-    exchangeService = PowerMockito.mock(ExchangeService.class);
-    PowerMockito.whenNew(ExchangeService.class).withArguments(any()).thenReturn(exchangeService);
     exchangeConnectorService = new ExchangeConnectorServiceImpl(exchangeConnectorStorage,
                                                                 agendaRemoteEventService,
                                                                 agendaEventService);
-    PowerMockito.mockStatic(NotificationUtils.class);
+    notificationUtilsMockedStatic = mockStatic(NotificationUtils.class);
   }
-  
+
+  @After
+  public void tearDown() {
+    notificationUtilsMockedStatic.close();
+  }
+
   @Test
   public void testGetExchangeEvents() throws Exception {
     // Given
@@ -105,14 +106,20 @@ public class ExchangeConnectorServiceImplTest {
                                                         periodStart,
                                                         periodStart.plusDays(1),
                                                         true));
-    when(exchangeService.findAppointments(any(WellKnownFolderName.class),
-                                          any(CalendarView.class))).thenReturn(exchangeAppointments);
 
     // When
-    List<EventEntity> retrievedExchangeEvents = exchangeConnectorService.getExchangeEvents(1,
-                                                                                           AgendaDateUtils.toRFC3339Date(periodStart),
-                                                                                           AgendaDateUtils.toRFC3339Date(periodEnd),
-                                                                                           dstTimeZone);
+    List<EventEntity> retrievedExchangeEvents;
+    ExchangeService exchangeService;
+    try (MockedConstruction<ExchangeService> exchangeServiceConstruction =
+        mockConstruction(ExchangeService.class,
+                         (mock, context) -> when(mock.findAppointments(any(WellKnownFolderName.class),
+                                                                       any(CalendarView.class))).thenReturn(exchangeAppointments))) {
+      retrievedExchangeEvents = exchangeConnectorService.getExchangeEvents(1,
+                                                                          AgendaDateUtils.toRFC3339Date(periodStart),
+                                                                          AgendaDateUtils.toRFC3339Date(periodEnd),
+                                                                          dstTimeZone);
+      exchangeService = exchangeServiceConstruction.constructed().get(0);
+    }
 
     // Then
     // All the occurrences of a recurring event are retrieved and not only its recurring master
@@ -142,8 +149,6 @@ public class ExchangeConnectorServiceImplTest {
     exchangeUserSetting.setPassword("password");
     when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
     System.setProperty("exo.exchange.server.url", "server.url");
-    when(exchangeService.findAppointments(any(WellKnownFolderName.class),
-                                          any(CalendarView.class))).thenReturn(new FindItemsResults<>());
 
     ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
     ZonedDateTime periodStart = ZonedDateTime.of(LocalDate.now(), LocalTime.of(0, 0), dstTimeZone);
@@ -154,7 +159,14 @@ public class ExchangeConnectorServiceImplTest {
     String end = AgendaDateUtils.toRFC3339Date(periodEnd).replace('+', ' ');
 
     // When
-    exchangeConnectorService.getExchangeEvents(1, start, end, dstTimeZone);
+    ExchangeService exchangeService;
+    try (MockedConstruction<ExchangeService> exchangeServiceConstruction =
+        mockConstruction(ExchangeService.class,
+                         (mock, context) -> when(mock.findAppointments(any(WellKnownFolderName.class),
+                                                                       any(CalendarView.class))).thenReturn(new FindItemsResults<>()))) {
+      exchangeConnectorService.getExchangeEvents(1, start, end, dstTimeZone);
+      exchangeService = exchangeServiceConstruction.constructed().get(0);
+    }
 
     // Then
     ArgumentCaptor<CalendarView> calendarViewCaptor = ArgumentCaptor.forClass(CalendarView.class);
@@ -185,9 +197,8 @@ public class ExchangeConnectorServiceImplTest {
     exchangeUserSetting.setPassword("password");
     when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
     System.setProperty("exo.exchange.server.url", "server.url");
-    
+
     when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(null);
-    when(exchangeService.getRequestedServerVersion()).thenReturn(ExchangeVersion.Exchange2010_SP2);
 
     // When
     EventEntity eventEntity = new EventEntity();
@@ -203,69 +214,74 @@ public class ExchangeConnectorServiceImplTest {
     eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
     Event event = new Event();
     when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(1)).saveRemoteEvent(any());
-    EventRecurrence eventRecurrence = new EventRecurrence();
-    eventRecurrence.setType(EventRecurrenceType.DAILY);
-    eventRecurrence.setOverallStart(ZonedDateTime.now());
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(2)).saveRemoteEvent(any());
 
-    eventRecurrence.setType(EventRecurrenceType.WEEK_DAYS);
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(3)).saveRemoteEvent(any());
+    try (MockedConstruction<ExchangeService> ignored =
+        mockConstruction(ExchangeService.class,
+                         (mock, context) -> when(mock.getRequestedServerVersion()).thenReturn(ExchangeVersion.Exchange2010_SP2))) {
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(1)).saveRemoteEvent(any());
+      EventRecurrence eventRecurrence = new EventRecurrence();
+      eventRecurrence.setType(EventRecurrenceType.DAILY);
+      eventRecurrence.setOverallStart(ZonedDateTime.now());
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(2)).saveRemoteEvent(any());
 
-    eventRecurrence.setType(EventRecurrenceType.WEEKLY);
-    eventRecurrence.setByDay(Collections.singletonList("WE"));
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(4)).saveRemoteEvent(any());
+      eventRecurrence.setType(EventRecurrenceType.WEEK_DAYS);
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(3)).saveRemoteEvent(any());
 
-    eventRecurrence.setType(EventRecurrenceType.MONTHLY);
-    eventRecurrence.setByMonth(Collections.singletonList("1"));
-    eventRecurrence.setByMonthDay(Collections.singletonList("1"));
-    eventRecurrence.setInterval(1);
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(5)).saveRemoteEvent(any());
+      eventRecurrence.setType(EventRecurrenceType.WEEKLY);
+      eventRecurrence.setByDay(Collections.singletonList("WE"));
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(4)).saveRemoteEvent(any());
 
-    eventRecurrence.setType(EventRecurrenceType.YEARLY);
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(6)).saveRemoteEvent(any());
+      eventRecurrence.setType(EventRecurrenceType.MONTHLY);
+      eventRecurrence.setByMonth(Collections.singletonList("1"));
+      eventRecurrence.setByMonthDay(Collections.singletonList("1"));
+      eventRecurrence.setInterval(1);
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(5)).saveRemoteEvent(any());
 
-    eventRecurrence.setType(EventRecurrenceType.CUSTOM);
+      eventRecurrence.setType(EventRecurrenceType.YEARLY);
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(6)).saveRemoteEvent(any());
 
-    eventRecurrence.setFrequency(EventRecurrenceFrequency.YEARLY);
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(7)).saveRemoteEvent(any());
+      eventRecurrence.setType(EventRecurrenceType.CUSTOM);
 
-    eventRecurrence.setFrequency(EventRecurrenceFrequency.MONTHLY);
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(8)).saveRemoteEvent(any());
+      eventRecurrence.setFrequency(EventRecurrenceFrequency.YEARLY);
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(7)).saveRemoteEvent(any());
 
-    eventRecurrence.setFrequency(EventRecurrenceFrequency.WEEKLY);
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(9)).saveRemoteEvent(any());
+      eventRecurrence.setFrequency(EventRecurrenceFrequency.MONTHLY);
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(8)).saveRemoteEvent(any());
 
-    eventRecurrence.setFrequency(EventRecurrenceFrequency.DAILY);
-    event.setRecurrence(eventRecurrence);
-    when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
-    verify(agendaRemoteEventService, times(10)).saveRemoteEvent(any());
+      eventRecurrence.setFrequency(EventRecurrenceFrequency.WEEKLY);
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(9)).saveRemoteEvent(any());
+
+      eventRecurrence.setFrequency(EventRecurrenceFrequency.DAILY);
+      event.setRecurrence(eventRecurrence);
+      when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+      verify(agendaRemoteEventService, times(10)).saveRemoteEvent(any());
+    }
   }
 
   @Test
@@ -276,7 +292,7 @@ public class ExchangeConnectorServiceImplTest {
     exchangeUserSetting.setPassword("password");
     when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
     System.setProperty("exo.exchange.server.url", "server.url");
-    
+
     RemoteEvent remoteEvent = new RemoteEvent();
     remoteEvent.setEventId(1);
     remoteEvent.setRemoteId("remoteId");
@@ -284,7 +300,6 @@ public class ExchangeConnectorServiceImplTest {
     remoteEvent.setRemoteProviderName("agenda.exchangeCalendar");
     when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(remoteEvent);
     Appointment appointment = mock(Appointment.class);
-    when(exchangeService.bindToItem(any(), any(), any())).thenReturn(appointment);
 
     // When
     EventEntity eventEntity = new EventEntity();
@@ -300,7 +315,12 @@ public class ExchangeConnectorServiceImplTest {
     eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
     Event event = new Event();
     when(agendaEventService.getEventById(eventEntity.getId())).thenReturn(event);
-    exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    try (MockedConstruction<ExchangeService> ignored =
+        mockConstruction(ExchangeService.class,
+                         (mock, context) -> when(mock.bindToItem(any(), any(), any())).thenReturn(appointment))) {
+      exchangeConnectorService.pushEventToExchange(1, eventEntity, dstTimeZone);
+    }
+
     // Then
     verify(appointment, times(1)).update(any(), any());
   }
@@ -321,7 +341,6 @@ public class ExchangeConnectorServiceImplTest {
     remoteEvent.setRemoteProviderName("agenda.exchangeCalendar");
     when(agendaRemoteEventService.findRemoteEvent(1, 1)).thenReturn(remoteEvent);
     Appointment appointment = mock(Appointment.class);
-    when(exchangeService.bindToItem(any(), any(), any())).thenReturn(appointment);
 
     // When
     EventEntity eventEntity = new EventEntity();
@@ -335,7 +354,11 @@ public class ExchangeConnectorServiceImplTest {
     eventEntity.setEnd(AgendaDateUtils.toRFC3339Date(endDate));
     eventEntity.setRemoteProviderId(1);
     eventEntity.setRemoteProviderName("agenda.exchangeCalendar");
-    exchangeConnectorService.deleteExchangeEvent(1, 1);
+    try (MockedConstruction<ExchangeService> ignored =
+        mockConstruction(ExchangeService.class,
+                         (mock, context) -> when(mock.bindToItem(any(), any(), any())).thenReturn(appointment))) {
+      exchangeConnectorService.deleteExchangeEvent(1, 1);
+    }
 
     // Then
     verify(appointment, times(1)).delete(any());
