@@ -1,6 +1,8 @@
 package org.exoplatform.agendaconnector.service;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -23,6 +25,7 @@ import org.exoplatform.agenda.util.NotificationUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -39,10 +42,9 @@ import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.enumeration.misc.ExchangeVersion;
 import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
-import microsoft.exchange.webservices.data.core.service.item.Item;
+import microsoft.exchange.webservices.data.property.complex.ItemId;
+import microsoft.exchange.webservices.data.search.CalendarView;
 import microsoft.exchange.webservices.data.search.FindItemsResults;
-import microsoft.exchange.webservices.data.search.ItemView;
-import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({ ExchangeConnectorUtils.class, ExchangeService.class, NotificationUtils.class })
@@ -79,18 +81,71 @@ public class ExchangeConnectorServiceImplTest {
     exchangeUserSetting.setPassword("password");
     when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
     System.setProperty("exo.exchange.server.url", "server.url");
-    FindItemsResults<Item> exchangeEventsItems = new FindItemsResults<Item>();
-    when(exchangeService.findItems(any(WellKnownFolderName.class), any(SearchFilter.class), any(ItemView.class))).thenReturn(exchangeEventsItems);
-    
-    // When
+
     ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
-    ZonedDateTime startDate =
-            ZonedDateTime.of(LocalDate.now(), LocalTime.of(10, 0), dstTimeZone).withZoneSameInstant(dstTimeZone);
-    ZonedDateTime endDate = startDate.plusHours(1);
-    List<EventEntity> retrievedExchangeEvents = exchangeConnectorService.getExchangeEvents(1, AgendaDateUtils.toRFC3339Date(startDate), AgendaDateUtils.toRFC3339Date(endDate), ZoneId.of("Europe/Paris"));
+    ZonedDateTime periodStart = ZonedDateTime.of(LocalDate.now(), LocalTime.of(0, 0), dstTimeZone);
+    ZonedDateTime periodEnd = ZonedDateTime.of(LocalDate.now(), LocalTime.of(23, 59), dstTimeZone);
+    ZonedDateTime firstOccurrenceStart = periodStart.plusHours(10);
+    ZonedDateTime secondOccurrenceStart = firstOccurrenceStart.plusDays(1);
+
+    FindItemsResults<Appointment> exchangeAppointments = new FindItemsResults<>();
+    // Two occurrences of the same recurring series and one all day event
+    exchangeAppointments.getItems().add(mockAppointment("occurrenceId1",
+                                                        "every day event",
+                                                        firstOccurrenceStart,
+                                                        firstOccurrenceStart.plusHours(1),
+                                                        false));
+    exchangeAppointments.getItems().add(mockAppointment("occurrenceId2",
+                                                        "every day event",
+                                                        secondOccurrenceStart,
+                                                        secondOccurrenceStart.plusHours(1),
+                                                        false));
+    exchangeAppointments.getItems().add(mockAppointment("allDayEventId",
+                                                        "all day event",
+                                                        periodStart,
+                                                        periodStart.plusDays(1),
+                                                        true));
+    when(exchangeService.findAppointments(any(WellKnownFolderName.class),
+                                          any(CalendarView.class))).thenReturn(exchangeAppointments);
+
+    // When
+    List<EventEntity> retrievedExchangeEvents = exchangeConnectorService.getExchangeEvents(1,
+                                                                                           AgendaDateUtils.toRFC3339Date(periodStart),
+                                                                                           AgendaDateUtils.toRFC3339Date(periodEnd),
+                                                                                           dstTimeZone);
 
     // Then
-    assertEquals(exchangeEventsItems.getItems().size(), retrievedExchangeEvents.size());
+    // All the occurrences of a recurring event are retrieved and not only its recurring master
+    assertEquals(exchangeAppointments.getItems().size(), retrievedExchangeEvents.size());
+    assertEquals("occurrenceId1", retrievedExchangeEvents.get(0).getRemoteId());
+    assertEquals("every day event", retrievedExchangeEvents.get(0).getSummary());
+    assertEquals(AgendaDateUtils.toRFC3339Date(firstOccurrenceStart), retrievedExchangeEvents.get(0).getStart());
+    assertFalse(retrievedExchangeEvents.get(0).isAllDay());
+    assertEquals("occurrenceId2", retrievedExchangeEvents.get(1).getRemoteId());
+    assertEquals(AgendaDateUtils.toRFC3339Date(secondOccurrenceStart), retrievedExchangeEvents.get(1).getStart());
+    assertTrue(retrievedExchangeEvents.get(2).isAllDay());
+    // The end date of an all day event is the last day of the event
+    assertEquals(AgendaDateUtils.toRFC3339Date(periodStart), retrievedExchangeEvents.get(2).getEnd());
+
+    // The events are searched over the whole requested period, kept in the user time zone
+    ArgumentCaptor<CalendarView> calendarViewCaptor = ArgumentCaptor.forClass(CalendarView.class);
+    verify(exchangeService).findAppointments(any(WellKnownFolderName.class), calendarViewCaptor.capture());
+    assertEquals(AgendaDateUtils.toDate(periodStart), calendarViewCaptor.getValue().getStartDate());
+    assertEquals(AgendaDateUtils.toDate(periodEnd), calendarViewCaptor.getValue().getEndDate());
+  }
+
+  private Appointment mockAppointment(String itemId,
+                                      String subject,
+                                      ZonedDateTime start,
+                                      ZonedDateTime end,
+                                      boolean allDay) throws Exception {
+    Appointment appointment = mock(Appointment.class);
+    when(appointment.getId()).thenReturn(new ItemId(itemId));
+    when(appointment.getSubject()).thenReturn(subject);
+    when(appointment.getStart()).thenReturn(AgendaDateUtils.toDate(start));
+    when(appointment.getEnd()).thenReturn(AgendaDateUtils.toDate(end));
+    when(appointment.getIsAllDayEvent()).thenReturn(allDay);
+    return appointment;
   }
 
   @Test
