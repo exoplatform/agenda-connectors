@@ -134,6 +134,35 @@ public class ExchangeConnectorServiceImplTest {
     assertEquals(AgendaDateUtils.toDate(periodEnd), calendarViewCaptor.getValue().getEndDate());
   }
 
+  @Test
+  public void testGetExchangeEventsWithNotUrlEncodedDates() throws Exception {
+    // Given
+    ExchangeUserSetting exchangeUserSetting = new ExchangeUserSetting();
+    exchangeUserSetting.setUsername("username");
+    exchangeUserSetting.setPassword("password");
+    when(exchangeConnectorStorage.getExchangeSetting(1)).thenReturn(exchangeUserSetting);
+    System.setProperty("exo.exchange.server.url", "server.url");
+    when(exchangeService.findAppointments(any(WellKnownFolderName.class),
+                                          any(CalendarView.class))).thenReturn(new FindItemsResults<>());
+
+    ZoneId dstTimeZone = ZoneId.of("Europe/Paris");
+    ZonedDateTime periodStart = ZonedDateTime.of(LocalDate.now(), LocalTime.of(0, 0), dstTimeZone);
+    ZonedDateTime periodEnd = ZonedDateTime.of(LocalDate.now(), LocalTime.of(23, 59), dstTimeZone);
+    // The '+' of the time zone offset is received as a space when the caller
+    // doesn't URL encode the dates
+    String start = AgendaDateUtils.toRFC3339Date(periodStart).replace('+', ' ');
+    String end = AgendaDateUtils.toRFC3339Date(periodEnd).replace('+', ' ');
+
+    // When
+    exchangeConnectorService.getExchangeEvents(1, start, end, dstTimeZone);
+
+    // Then
+    ArgumentCaptor<CalendarView> calendarViewCaptor = ArgumentCaptor.forClass(CalendarView.class);
+    verify(exchangeService).findAppointments(any(WellKnownFolderName.class), calendarViewCaptor.capture());
+    assertEquals(AgendaDateUtils.toDate(periodStart), calendarViewCaptor.getValue().getStartDate());
+    assertEquals(AgendaDateUtils.toDate(periodEnd), calendarViewCaptor.getValue().getEndDate());
+  }
+
   private Appointment mockAppointment(String itemId,
                                       String subject,
                                       ZonedDateTime start,

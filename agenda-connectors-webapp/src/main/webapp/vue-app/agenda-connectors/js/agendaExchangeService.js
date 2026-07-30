@@ -60,7 +60,14 @@ export const deleteExchangeSetting = () => {
 };
 
 export const getExchangeEvents = (start, end) => {
-  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/events?start=${start}&end=${end}&timeZoneId=${USER_TIMEZONE_ID}`, {
+  // The dates have to be encoded, else the '+' of their time zone offset is
+  // received as a space by the server
+  const params = new URLSearchParams({
+    start,
+    end,
+    timeZoneId: USER_TIMEZONE_ID,
+  });
+  return fetch(`${eXo.env.portal.context}/${eXo.env.portal.rest}/v1/exchange/events?${params.toString()}`, {
     credentials: 'include',
     method: 'GET',
   }).then(resp => {

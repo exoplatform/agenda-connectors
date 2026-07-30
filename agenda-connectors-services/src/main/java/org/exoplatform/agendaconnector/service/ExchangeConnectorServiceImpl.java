@@ -235,10 +235,13 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
     if (StringUtils.isBlank(date)) {
       return null;
     }
-    if (date.length() > 10) {
-      return AgendaDateUtils.parseRFC3339ToZonedDateTime(date, userTimeZone);
+    // The '+' of the time zone offset is decoded as a space when the date isn't
+    // URL encoded by the caller
+    String rfc3339Date = date.replace(' ', '+');
+    if (rfc3339Date.length() > 10) {
+      return AgendaDateUtils.parseRFC3339ToZonedDateTime(rfc3339Date, userTimeZone);
     }
-    return AgendaDateUtils.parseAllDayDateToZonedDateTime(date).withZoneSameLocal(userTimeZone);
+    return AgendaDateUtils.parseAllDayDateToZonedDateTime(rfc3339Date).withZoneSameLocal(userTimeZone);
   }
 
   private Recurrence getEventRecurrence(long eventId) throws ArgumentOutOfRangeException {
