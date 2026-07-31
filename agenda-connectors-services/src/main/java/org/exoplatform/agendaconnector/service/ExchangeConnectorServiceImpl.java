@@ -41,22 +41,21 @@ import org.exoplatform.agendaconnector.storage.ExchangeConnectorStorage;
 import org.exoplatform.agendaconnector.utils.ExchangeConnectorUtils;
 
 import microsoft.exchange.webservices.data.core.ExchangeService;
+import microsoft.exchange.webservices.data.core.PropertySet;
+import microsoft.exchange.webservices.data.core.enumeration.property.BasePropertySet;
 import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
-import microsoft.exchange.webservices.data.core.enumeration.search.LogicalOperator;
 import microsoft.exchange.webservices.data.core.enumeration.service.ConflictResolutionMode;
 import microsoft.exchange.webservices.data.core.enumeration.service.DeleteMode;
 import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsMode;
 import microsoft.exchange.webservices.data.core.enumeration.service.SendInvitationsOrCancellationsMode;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
 import microsoft.exchange.webservices.data.core.service.item.Appointment;
-import microsoft.exchange.webservices.data.core.service.item.Item;
 import microsoft.exchange.webservices.data.core.service.schema.AppointmentSchema;
+import microsoft.exchange.webservices.data.core.service.schema.ItemSchema;
 import microsoft.exchange.webservices.data.property.complex.FolderId;
 import microsoft.exchange.webservices.data.property.complex.ItemId;
-import microsoft.exchange.webservices.data.property.definition.PropertyDefinition;
+import microsoft.exchange.webservices.data.search.CalendarView;
 import microsoft.exchange.webservices.data.search.FindItemsResults;
-import microsoft.exchange.webservices.data.search.ItemView;
-import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 import org.exoplatform.services.log.ExoLogger;
 import org.exoplatform.services.log.Log;
 
@@ -106,66 +105,38 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
                                              ZoneId userTimeZone) throws IllegalAccessException {
     ExchangeUserSetting exchangeUserSetting = getExchangeSetting(userIdentityId);
     try (ExchangeService exchangeService = ExchangeConnectorUtils.connectExchangeServer(exchangeUserSetting)) {
-      ItemView view = new ItemView(100);
+      ZonedDateTime startZonedDateTime = parsePeriodDate(start, userTimeZone);
+      ZonedDateTime endZonedDatetime = parsePeriodDate(end, userTimeZone);
 
-      ZonedDateTime startZonedDateTime = AgendaDateUtils.parseAllDayDateToZonedDateTime(start);
-      SearchFilter exchangeStartSearchFilter =
-                                             new SearchFilter.IsGreaterThanOrEqualTo(AppointmentSchema.Start,
-                                                                                     AgendaDateUtils.toDate(startZonedDateTime));
-      ZonedDateTime endZonedDatetime = AgendaDateUtils.parseAllDayDateToZonedDateTime(end).plusDays(1);// We
-                                                                                                       // have
-                                                                                                       // added
-                                                                                                       // on
-                                                                                                       // day
-                                                                                                       // in
-                                                                                                       // order
-                                                                                                       // to
-                                                                                                       // get
-                                                                                                       // events
-                                                                                                       // of
-                                                                                                       // the
-                                                                                                       // end
-                                                                                                       // date
-                                                                                                       // day
-      SearchFilter exchangeEndSearchFilter = new SearchFilter.IsLessThanOrEqualTo(AppointmentSchema.End,
-                                                                                  AgendaDateUtils.toDate(endZonedDatetime));
-
-      SearchFilter exchangeEventsSearchFilter = new SearchFilter.SearchFilterCollection(LogicalOperator.And,
-                                                                                        exchangeStartSearchFilter,
-                                                                                        exchangeEndSearchFilter);
-      FindItemsResults<Item> exchangeEventsItems = exchangeService.findItems(WellKnownFolderName.Calendar,
-                                                                             exchangeEventsSearchFilter,
-                                                                             view);
+      CalendarView calendarView = new CalendarView(AgendaDateUtils.toDate(startZonedDateTime),
+                                                   AgendaDateUtils.toDate(endZonedDatetime),
+                                                   ExchangeConnectorUtils.EXCHANGE_MAX_EVENTS);
+      calendarView.setPropertySet(new PropertySet(BasePropertySet.IdOnly,
+                                                  ItemSchema.Subject,
+                                                  AppointmentSchema.Start,
+                                                  AppointmentSchema.End,
+                                                  AppointmentSchema.IsAllDayEvent));
+      FindItemsResults<Appointment> exchangeAppointments = exchangeService.findAppointments(WellKnownFolderName.Calendar,
+                                                                                            calendarView);
       List<EventEntity> exchangeEvents = new ArrayList<>();
-      for (Item exchangeEventItem : exchangeEventsItems) {
+      for (Appointment exchangeAppointment : exchangeAppointments) {
         EventEntity exchangeEvent = new EventEntity();
-        exchangeEvent.setRemoteId(String.valueOf(exchangeEventItem.getId()));
-        exchangeEvent.setSummary(exchangeEventItem.getSubject());
-        Map<PropertyDefinition, Object> exchangeEventItemProperties = exchangeEventItem.getPropertyBag().getProperties();
+        exchangeEvent.setRemoteId(String.valueOf(exchangeAppointment.getId()));
+        exchangeEvent.setSummary(exchangeAppointment.getSubject());
+        boolean allDay = Boolean.TRUE.equals(exchangeAppointment.getIsAllDayEvent());
+        exchangeEvent.setAllDay(allDay);
 
-        Date exchangeEventStartDate =
-                                    (Date) Objects.requireNonNull(exchangeEventItemProperties.entrySet()
-                                                                                             .stream()
-                                                                                             .filter(exchangeEventItemProperty -> exchangeEventItemProperty.getKey()
-                                                                                                                                                           .getUri()
-                                                                                                                                                           .equals(ExchangeConnectorUtils.EXCHANGE_APPOINTMENT_SCHEMA_START))
-                                                                                             .findFirst()
-                                                                                             .orElse(null))
-                                                  .getValue();
-        ZonedDateTime exchangeEventStartDateTime = AgendaDateUtils.fromDate(exchangeEventStartDate)
+        ZonedDateTime exchangeEventStartDateTime = AgendaDateUtils.fromDate(exchangeAppointment.getStart())
                                                                   .withZoneSameInstant(userTimeZone);
         exchangeEvent.setStart(AgendaDateUtils.toRFC3339Date(exchangeEventStartDateTime));
 
-        Date exchangeEventEndDate =
-                                  (Date) Objects.requireNonNull(exchangeEventItemProperties.entrySet()
-                                                                                           .stream()
-                                                                                           .filter(exchangeEventItemProperty -> exchangeEventItemProperty.getKey()
-                                                                                                                                                         .getUri()
-                                                                                                                                                         .equals(ExchangeConnectorUtils.EXCHANGE_APPOINTMENT_SCHEMA_END))
-                                                                                           .findFirst()
-                                                                                           .orElse(null))
-                                                .getValue();
-        ZonedDateTime exchangeEventEndDateTime = AgendaDateUtils.fromDate(exchangeEventEndDate).withZoneSameInstant(userTimeZone);
+        ZonedDateTime exchangeEventEndDateTime = AgendaDateUtils.fromDate(exchangeAppointment.getEnd())
+                                                                .withZoneSameInstant(userTimeZone);
+        if (allDay) {
+          // Exchange returns the day following the last day of the event as end
+          // date of an all day event
+          exchangeEventEndDateTime = exchangeEventEndDateTime.minusDays(1);
+        }
         exchangeEvent.setEnd(AgendaDateUtils.toRFC3339Date(exchangeEventEndDateTime));
         exchangeEvents.add(exchangeEvent);
       }
@@ -244,6 +215,19 @@ public class ExchangeConnectorServiceImpl implements ExchangeConnectorService {
       LOG.error("User {} is not allowed to connect to exchange server",userIdentityId,e);
       throw new IllegalAccessException("User '" + userIdentityId + "' is not allowed to connect to exchange server");
     }
+  }
+
+  private ZonedDateTime parsePeriodDate(String date, ZoneId userTimeZone) {
+    if (StringUtils.isBlank(date)) {
+      return null;
+    }
+    // The '+' of the time zone offset is decoded as a space when the date isn't
+    // URL encoded by the caller
+    String rfc3339Date = date.replace(' ', '+');
+    if (rfc3339Date.length() > 10) {
+      return AgendaDateUtils.parseRFC3339ToZonedDateTime(rfc3339Date, userTimeZone);
+    }
+    return AgendaDateUtils.parseAllDayDateToZonedDateTime(rfc3339Date).withZoneSameLocal(userTimeZone);
   }
 
   private Recurrence getEventRecurrence(long eventId) throws ArgumentOutOfRangeException {
