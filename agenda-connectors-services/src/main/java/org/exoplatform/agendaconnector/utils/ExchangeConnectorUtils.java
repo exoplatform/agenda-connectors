@@ -57,11 +57,9 @@ public class ExchangeConnectorUtils {
   public static final String EXCHANGE_SERVER_URL_PROPERTY = "exo.exchange.server.url";
   
   public static final String EWS_URL = "/EWS/Exchange.asmx";
-  
-  public static final String EXCHANGE_APPOINTMENT_SCHEMA_START = "calendar:Start";
-  
-  public static final String EXCHANGE_APPOINTMENT_SCHEMA_END = "calendar:End";
-  
+
+  public static final int    EXCHANGE_MAX_EVENTS = 100;
+
   private ExchangeConnectorUtils() {
   }
 
@@ -114,7 +112,7 @@ public class ExchangeConnectorUtils {
   private static void checkConnection(ExchangeService exchangeService) throws Exception {
     //this function will verify if settings entered by user are functionnal
 
-    ItemView view = new ItemView(100);
+    ItemView view = new ItemView(EXCHANGE_MAX_EVENTS);
 
     ZonedDateTime startZonedDateTime = ZonedDateTime.now();
     SearchFilter exchangeStartSearchFilter =
