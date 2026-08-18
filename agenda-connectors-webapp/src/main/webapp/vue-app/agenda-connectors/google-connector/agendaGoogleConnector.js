@@ -138,6 +138,22 @@ export default {
       });
     }
   },
+  /**
+   * Forgets that write access was granted.
+   * <p>
+   * canPush is not a property of this connector but of the account attached to
+   * it: it records that the user granted the write scope, and it is recomputed
+   * from hasGrantedAllScopes() every time a token is obtained. Disconnecting
+   * revokes that grant, so keeping the flag would claim a permission that no
+   * longer exists — connect() reads it to decide whether to ask for write
+   * access, and would skip asking, leaving the client without a usable token
+   * until the first copy failed.
+   *
+   * @returns {void}
+   */
+  resetPushAbility() {
+    this.canPush = false;
+  },
   disconnect() {
     this.loadingCallback(this, true);
     return removeToken().then(() => {
