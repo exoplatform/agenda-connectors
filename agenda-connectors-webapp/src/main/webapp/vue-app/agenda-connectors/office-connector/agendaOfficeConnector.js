@@ -100,6 +100,16 @@ export default {
       })
       .finally(() => this.loadingCallback(this, false));
   },
+  /**
+   * Forgets that write access was granted, for the same reason as the Google
+   * connector: canPush here records a consented scope, not a static ability,
+   * and disconnecting is what takes the consent away.
+   *
+   * @returns {void}
+   */
+  resetPushAbility() {
+    this.canPush = false;
+  },
   disconnect() {
     return new Promise((resolve) => {
       this.officeApi.browserStorage.removeAllAccounts();
