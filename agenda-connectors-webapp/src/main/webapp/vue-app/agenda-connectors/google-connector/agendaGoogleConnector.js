@@ -15,6 +15,17 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 import jwt_decode from 'jwt-decode';
+import {mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCalendarMapping.js';
+
+/**
+ * The calendar eXo copies of meetings are pushed to. Deliberately not derived
+ * from the calendar listing: reading spans all of the user's calendars, but
+ * the write destination stays the account's primary calendar, where every
+ * copy pushed so far already lives — pointing new copies elsewhere would
+ * strand the existing ones. A future decision to change the destination
+ * belongs here, and only here.
+ */
+const PUSH_CALENDAR_ID = 'primary';
 
 export default {
   name: 'agenda.googleCalendar',
@@ -27,6 +38,7 @@ export default {
   SCOPE_WRITE: 'https://www.googleapis.com/auth/calendar.events',
   canConnect: true,
   canPush: false,
+  canListCalendars: true,
   initialized: false,
   isSignedIn: false,
   pushing: false,
@@ -204,6 +216,42 @@ export default {
       return Promise.resolve(null);
     }
   },
+  /**
+   * The calendars of the connected Google account, in the shape agenda
+   * expects from any connector able to list them — the contract the CalDAV
+   * connector established: one entry per calendar, each with an identity, a
+   * name, a colour that is always usable, and whether it may be written to.
+   *
+   * The identity is Google's calendar id, never the display name: renaming a
+   * calendar must not detach whatever agenda associated with it, and it is
+   * the same id the fetched events are tagged with, which is what makes the
+   * left panel's per-calendar checkboxes actually filter the grid.
+   *
+   * An expired token is renewed once, the same way getEvents does it; any
+   * other failure is the caller's to handle — agenda logs and drops the one
+   * connector rather than emptying its whole section.
+   *
+   * @returns {Promise} resolves with one {id, name, color, readOnly} per
+   *          calendar, or an empty list when the API is not ready
+   */
+  listCalendars() {
+    if (!this.gapi || !this.gapi.client || !this.gapi.client.calendar) {
+      return Promise.resolve([]);
+    }
+    return retrieveCalendarList(this)
+      .catch(error => {
+        if (error.status === 403 || error.status === 401) {
+          return this.authorize().then(tokenResponse => {
+            if (tokenResponse && tokenResponse.access_token) {
+              this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+            }
+            return retrieveCalendarList(this);
+          });
+        }
+        throw error;
+      })
+      .then(entries => entries.map(mapCalendarListEntry));
+  },
   deleteEvent(event, connectorRecurringEventId) {
     return this.saveEvent(event, connectorRecurringEventId, true);
   },
@@ -249,6 +297,48 @@ export default {
 };
 
 /**
+ * The raw calendarList entries of the connected account, every page of them:
+ * the API answers by pages of at most 250, so stopping at the first page
+ * would silently drop the calendars of a user who has many.
+ *
+ * Hidden calendars are left out by the API's own default — a calendar the
+ * user hid in Google's UI is one they do not want painted here either.
+ *
+ * @param {Object}
+ *          connector Google Connector SPI
+ * @param {String}
+ *          pageToken token of the page to fetch, none for the first
+ * @param {Array}
+ *          accumulated entries of the pages already fetched
+ * @returns {Promise} a promise with the account's calendarList entries
+ */
+function retrieveCalendarList(connector, pageToken, accumulated) {
+  const options = {};
+  if (pageToken) {
+    options.pageToken = pageToken;
+  }
+  return connector.gapi.client.calendar.calendarList.list(options)
+    .then(response => {
+      const result = response.result || {};
+      const entries = (accumulated || []).concat(result.items || []);
+      return result.nextPageToken
+        ? retrieveCalendarList(connector, result.nextPageToken, entries)
+        : entries;
+    });
+}
+
+/**
+ * The account's events over the period, gathered from every calendar of the
+ * account rather than from the primary one alone. Each event is tagged with
+ * the calendar it came from and carries that calendar's real colour — the
+ * former single-calendar implementation hardcoded '#FFFFFF', a white event
+ * on the white grid.
+ *
+ * One calendar that fails must not blank the whole agenda: its failure is
+ * logged and it contributes no events, while the others still answer. An
+ * authentication failure is rethrown instead, because it concerns every
+ * calendar and the caller knows how to renew the token.
+ *
  * @param {Object}
  *          connector Google Connector SPI
  * @param {Date}
@@ -258,27 +348,28 @@ export default {
  * @returns {Promise} a promise with list of Google events
  */
 function retrieveEvents(connector, periodStartDate, periodEndDate) {
-  return connector.gapi.client.calendar.events.list({
-    'calendarId': 'primary',
-    'timeMin': periodStartDate,
-    'timeMax': periodEndDate,
-    'singleEvents': true,
-    'orderBy': 'startTime'
-  }).then(events => events.result.items).then(events => {
-    events.forEach(event => {
-      event.allDay = !!event.start.date;
-      event.start = event.start.dateTime || event.start.date;
-      // Google api returns all day event with one day added for end date.
-      const endDate = new Date(event.end.date);
-      endDate.setDate(endDate.getDate()-1);
-      event.end = event.allDay ? endDate : event.end.dateTime;
-      event.name = event.summary;
-      event.type = 'remoteEvent';
-      event.color = '#FFFFFF';
+  return retrieveCalendarList(connector)
+    .then(entries => entries.map(mapCalendarListEntry))
+    .then(calendars => Promise.all(calendars.map(calendar =>
+      connector.gapi.client.calendar.events.list({
+        'calendarId': calendar.id,
+        'timeMin': periodStartDate,
+        'timeMax': periodEndDate,
+        'singleEvents': true,
+        'orderBy': 'startTime'
+      }).then(events => (events.result.items || []).map(event => mapGoogleEvent(event, calendar)))
+        .catch(error => {
+          if (error.status === 403 || error.status === 401) {
+            throw error;
+          }
+          console.error(`cannot retrieve the events of Google calendar ${calendar.id}`, error);
+          return [];
+        })
+    )))
+    .then(eventLists => {
+      connector.loadingCallback(connector, false);
+      return mergeEventLists(eventLists);
     });
-    connector.loadingCallback(connector, false);
-    return events;
-  });
 }
 
 function deleteCookie(name) {
@@ -438,7 +529,7 @@ function pushEventToGoogle(connector, event, connectorRecurringEventId, deleteEv
 
   if (isExceptionalOccurrence || isRemoteEvent || isDeleteEvent) {
     const options = {
-      'calendarId': 'primary',
+      'calendarId': PUSH_CALENDAR_ID,
       'showDeleted': true,
     };
     if (isExceptionalOccurrence) {
@@ -474,7 +565,7 @@ function pushEventToGoogle(connector, event, connectorRecurringEventId, deleteEv
           connector.gapi.client.calendar.events.insert;
 
       const options = {
-        calendarId: 'primary',
+        calendarId: PUSH_CALENDAR_ID,
       };
 
       if (isDeleteEvent) {
