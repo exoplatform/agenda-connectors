@@ -27,6 +27,20 @@ import connector from '../../main/webapp/vue-app/agenda-connectors/google-connec
 const PERIOD_START = new Date('2026-09-01T00:00:00Z');
 const PERIOD_END = new Date('2026-09-30T23:59:59Z');
 
+/**
+ * Google's own hasGrantedAllScopes semantics: it answers from the scopes the
+ * token itself declares. Modelling it any other way makes a test that cannot
+ * tell what the connector reads from what it assumes.
+ *
+ * @returns {Object} a stand-in for google.accounts.oauth2
+ */
+function grantReader() {
+  return {
+    hasGrantedAllScopes: (token, scope) =>
+      ((token && token.scope) || '').split(' ').filter(Boolean).includes(scope),
+  };
+}
+
 /** A Google API error as gapi rejects it: an object carrying a status. */
 function googleError(status) {
   return {status: status, result: {error: {code: status}}};
@@ -60,7 +74,7 @@ function stubAccount(eventsByCalendar) {
   // A normally-granted account: anything else would quietly divert these
   // tests onto the primary-only fallback, where a fixture whose calendar
   // happens to be named 'primary' still looks green.
-  connector.cientOauth = {hasGrantedAllScopes: () => true};
+  connector.cientOauth = grantReader();
   connector.authorize = jest.fn(() => Promise.resolve({access_token: 'renewed'}));
   connector.gapi = {
     client: {
@@ -125,9 +139,6 @@ describe('an account whose grant cannot list calendars', () => {
   // agenda they had, not lose it.
   function stubNarrowGrant(eventsByCalendar) {
     const counts = stubAccount(eventsByCalendar);
-    connector.cientOauth = {
-      hasGrantedAllScopes: (token, scope) => scope === connector.SCOPE_WRITE,
-    };
     connector.applyGrantedScopes({
       access_token: 'old-narrow-grant',
       scope: connector.SCOPE_WRITE,
@@ -199,7 +210,6 @@ describe('an account whose grant cannot list calendars', () => {
 
   it('lists again once the grant includes the read scope', () => {
     const counts = stubAccount({'primary': [googleEvent('a', 1)]});
-    connector.cientOauth = {hasGrantedAllScopes: () => true};
     connector.applyGrantedScopes({
       access_token: 'widened',
       scope: `${connector.SCOPE_READ} ${connector.SCOPE_WRITE}`,
