@@ -128,7 +128,10 @@ describe('an account whose grant cannot list calendars', () => {
     connector.cientOauth = {
       hasGrantedAllScopes: (token, scope) => scope === connector.SCOPE_WRITE,
     };
-    connector.applyGrantedScopes({access_token: 'old-narrow-grant'});
+    connector.applyGrantedScopes({
+      access_token: 'old-narrow-grant',
+      scope: connector.SCOPE_WRITE,
+    });
     return counts;
   }
 
@@ -163,10 +166,44 @@ describe('an account whose grant cannot list calendars', () => {
     expect(connector.canPush).toBe(false);
   });
 
+  it('treats a token that declares no scopes as unknown, not as ungranted', () => {
+    // Every token refresh overwrites the stored blob, and RFC 6749 §5.1
+    // makes scope optional on a refresh response when it is unchanged. A
+    // token that says nothing must not convict the account of holding
+    // nothing — which for canListCalendars would be permanent, since the
+    // fallback it selects raises no error that could ever correct it.
+    stubNarrowGrant({'primary': [googleEvent('a', 1)]});
+    expect(connector.canListCalendars).toBe(false);
+    expect(connector.canPush).toBe(true);
+    connector.applyGrantedScopes({access_token: 'refreshed-without-scope'});
+    expect(connector.canListCalendars).toBe(false);
+    expect(connector.canPush).toBe(true);
+  });
+
+  it('does not let a scopeless refresh cancel a grant that could list', () => {
+    const counts = stubAccount({
+      'primary': [googleEvent('a', 1)],
+      'shared@group.calendar.google.com': [googleEvent('b', 2)],
+    });
+    connector.applyGrantedScopes({
+      access_token: 'full',
+      scope: `${connector.SCOPE_READ} ${connector.SCOPE_WRITE}`,
+    });
+    connector.applyGrantedScopes({access_token: 'refreshed-without-scope'});
+    return connector.getEvents(PERIOD_START, PERIOD_END).then(events => {
+      expect(connector.canListCalendars).toBe(true);
+      expect(counts.calendarList).toBe(1);
+      expect(events.map(event => event.id)).toEqual(['a', 'b']);
+    });
+  });
+
   it('lists again once the grant includes the read scope', () => {
     const counts = stubAccount({'primary': [googleEvent('a', 1)]});
     connector.cientOauth = {hasGrantedAllScopes: () => true};
-    connector.applyGrantedScopes({access_token: 'widened'});
+    connector.applyGrantedScopes({
+      access_token: 'widened',
+      scope: `${connector.SCOPE_READ} ${connector.SCOPE_WRITE}`,
+    });
     return connector.getEvents(PERIOD_START, PERIOD_END)
       .then(() => expect(counts.calendarList).toBe(1));
   });

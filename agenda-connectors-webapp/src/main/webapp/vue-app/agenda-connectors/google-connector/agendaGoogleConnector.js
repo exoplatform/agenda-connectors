@@ -131,6 +131,19 @@ export default {
    * @returns {void}
    */
   applyGrantedScopes(tokenResponse) {
+    // A token that declares no scopes says nothing about what was granted,
+    // and "says nothing" must not be read as "granted nothing". The stored
+    // blob is overwritten by every token refresh, and RFC 6749 §5.1 makes
+    // the scope of a refresh response OPTIONAL precisely when it is
+    // unchanged — so a refresh that omits it would otherwise convict an
+    // account of holding no permissions at all, permanently: canPush would
+    // be recoverable through the push flow, canListCalendars would not,
+    // because the fallback it selects raises no error that could correct it.
+    // Leaving both untouched keeps whatever the last token that did declare
+    // its scopes established.
+    if (!tokenResponse || !tokenResponse.scope) {
+      return;
+    }
     this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
     this.canListCalendars = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_READ);
   },
