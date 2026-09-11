@@ -41,11 +41,12 @@ export default {
   canListCalendars: true,
   /**
    * The in-flight or resolved calendar listing of the connected account,
-   * shared by the left panel and by every event fetch so that a period
-   * navigation costs one request per calendar and not one more to re-list
-   * them. Reset whenever the account behind it changes — connecting or
-   * disconnecting — and cleared on failure so a transient error is not
-   * remembered as the account's calendars.
+   * published by listCalendars() and read by every event fetch, so that a
+   * period navigation costs one request per calendar and not one more to
+   * re-list them. Reset whenever the account behind it changes — connecting
+   * or disconnecting — and cleared on failure so a transient error is not
+   * remembered as the account's calendars. See listAccountCalendars for why
+   * only the event path reads it.
    */
   calendarListing: null,
   initialized: false,
@@ -258,7 +259,7 @@ export default {
     if (!this.gapi || !this.gapi.client || !this.gapi.client.calendar) {
       return Promise.resolve([]);
     }
-    return listAccountCalendars(this)
+    return listAccountCalendars(this, true)
       .catch(error => {
         if (error.status === 403 || error.status === 401) {
           return this.authorize().then(tokenResponse => {
@@ -391,6 +392,16 @@ function retrieveEvents(connector, periodStartDate, periodEndDate) {
  * own RemoteEventConnector memoises listCalendars() per connector for
  * exactly this reason.
  *
+ * <strong>Who refreshes it.</strong> listCalendars() always re-lists and
+ * republishes the result here, because that is the call agenda makes when it
+ * wants current data — the left panel binds it to its agenda-refresh and
+ * agenda-refresh-personal-calendars signals precisely so a calendar created,
+ * renamed or unshared in Google appears without a reload. Event fetches read
+ * the published entry instead, which is where the saved request actually
+ * was: a period navigation no longer re-lists the account on top of its
+ * per-calendar event requests. Memoising both would have made those refresh
+ * signals inert for the life of the page.
+ *
  * A failure is not remembered: the entry is cleared so the next caller
  * retries, rather than inheriting a transient error as "this account has no
  * calendars". The entry is also cleared by connect() and disconnect(),
@@ -398,10 +409,12 @@ function retrieveEvents(connector, periodStartDate, periodEndDate) {
  *
  * @param {Object}
  *          connector Google Connector SPI
+ * @param {Boolean}
+ *          forceRefresh re-list even when an entry is already published
  * @returns {Promise} a promise with the account's mapped calendars
  */
-function listAccountCalendars(connector) {
-  if (!connector.calendarListing) {
+function listAccountCalendars(connector, forceRefresh) {
+  if (forceRefresh || !connector.calendarListing) {
     connector.calendarListing = retrieveCalendarList(connector)
       .then(entries => entries.map(mapCalendarListEntry))
       .catch(error => {

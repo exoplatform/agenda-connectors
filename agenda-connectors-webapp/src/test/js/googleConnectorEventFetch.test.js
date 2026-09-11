@@ -208,29 +208,37 @@ describe('the calendar listing is fetched once and shared', () => {
       });
   });
 
-  it('lists afresh after the account is disconnected', () => {
+  it('re-lists whenever the panel asks, so agenda-refresh is not inert', () => {
+    const counts = stubAccount({'primary': [googleEvent('a', 1)]});
+    // A calendar created or renamed in Google mid-session has to appear
+    // without a reload; the left panel gets that by asking again.
+    return connector.listCalendars()
+      .then(() => connector.listCalendars())
+      .then(() => expect(counts.calendarList).toBe(2));
+  });
+
+  it('forgets the account it listed once it is disconnected', () => {
     const counts = stubAccount({'primary': [googleEvent('a', 1)]});
     connector.gapi.client.getToken = () => null;
     connector.user = null;
     global.eXo = {env: {portal: {context: 'portal', rest: 'rest'}}};
     global.fetch = jest.fn(() => Promise.resolve({ok: true}));
+    // Observed through getEvents, which reads the published entry: if
+    // disconnect() did not clear it, this would cost no second listing.
     return connector.listCalendars()
       .then(() => connector.disconnect())
-      .then(() => connector.listCalendars())
-      // Asked through the behaviour rather than the private field: the next
-      // account must be listed afresh, never answered with the calendars of
-      // the one that just left.
+      .then(() => connector.getEvents(PERIOD_START, PERIOD_END))
       .then(() => expect(counts.calendarList).toBe(2));
   });
 
-  it('lists afresh after another account is connected', () => {
+  it('forgets the account it listed once another is connected', () => {
     const counts = stubAccount({'primary': [googleEvent('a', 1)]});
     connector.canPush = true;
     connector.credential = {email: 'someone@example.com'};
     connector.authenticate = jest.fn(() => Promise.resolve());
     return connector.listCalendars()
       .then(() => connector.connect(false))
-      .then(() => connector.listCalendars())
+      .then(() => connector.getEvents(PERIOD_START, PERIOD_END))
       .then(() => expect(counts.calendarList).toBe(2));
   });
 });
