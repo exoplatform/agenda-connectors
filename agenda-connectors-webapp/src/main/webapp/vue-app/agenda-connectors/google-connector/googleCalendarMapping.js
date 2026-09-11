@@ -2,17 +2,17 @@
  * Copyright (C) 2026 eXo Platform SAS.
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
+ * it under the terms of the GNU Affero General Public License
+ * as published by the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * along with this program. If not, see <gnu.org/licenses>.
  */
 
 /**
@@ -104,11 +104,11 @@ export function mapGoogleEvent(gEvent, calendar) {
  * @returns {Array} one flat, deduplicated, start-ordered list
  */
 export function mergeEventLists(eventLists) {
-  const seenIds = [];
+  const seenIds = new Set();
   const events = [];
   (eventLists || []).forEach(list => (list || []).forEach(event => {
-    if (!event.id || !seenIds.includes(event.id)) {
-      seenIds.push(event.id);
+    if (!event.id || !seenIds.has(event.id)) {
+      seenIds.add(event.id);
       events.push(event);
     }
   }));

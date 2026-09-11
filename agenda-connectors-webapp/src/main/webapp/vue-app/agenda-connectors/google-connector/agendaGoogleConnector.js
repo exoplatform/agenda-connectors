@@ -39,6 +39,15 @@ export default {
   canConnect: true,
   canPush: false,
   canListCalendars: true,
+  /**
+   * The in-flight or resolved calendar listing of the connected account,
+   * shared by the left panel and by every event fetch so that a period
+   * navigation costs one request per calendar and not one more to re-list
+   * them. Reset whenever the account behind it changes — connecting or
+   * disconnecting — and cleared on failure so a transient error is not
+   * remembered as the account's calendars.
+   */
+  calendarListing: null,
   initialized: false,
   isSignedIn: false,
   pushing: false,
@@ -122,6 +131,8 @@ export default {
   },
   connect(askWriteAccess) {
     this.loadingCallback(this, true);
+    // A different account answers with different calendars.
+    this.calendarListing = null;
     if (askWriteAccess && !this.canPush) {
       return this.authorize().then(tokenResponse => {
         if (tokenResponse && tokenResponse.access_token) {
@@ -168,6 +179,8 @@ export default {
   },
   disconnect() {
     this.loadingCallback(this, true);
+    // The calendars listed here belong to the account being disconnected.
+    this.calendarListing = null;
     return removeToken().then(() => {
       if (this.gapi.client.getToken() && this.cientOauth || this.user) {
         this.cientOauth.revoke(this.gapi.client.getToken());
@@ -191,26 +204,33 @@ export default {
               return this.authorize().then((tokenResponse) => {
                 if (tokenResponse && tokenResponse.access_token) {
                   this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-                  retrieveEvents(this, periodStartDate, periodEndDate)
+                  // Returned, so that a failure of this attempt reaches the
+                  // handler below instead of becoming an unhandled rejection
+                  // that leaves this promise pending for ever.
+                  return retrieveEvents(this, periodStartDate, periodEndDate)
                     .then(gEvents => resolve(gEvents))
                     .catch((e) => {
                       if (e.status === 403 || e.status === 401) {
-                        return this.authorize(true).then(() => {
+                        return this.authorize(true).then(() =>
                           retrieveEvents(this, periodStartDate, periodEndDate)
-                            .then(gEvents => resolve(gEvents));
-                        });
+                            .then(gEvents => resolve(gEvents)));
                       } else {
-                        this.loadingCallback(this, false);
                         reject(e);
                       }
                     });
                 }
+                // Re-authorising answered no usable token: there is nothing
+                // left to try, and the caller must not be left waiting.
+                reject(e);
               });
             } else {
-              this.loadingCallback(this, false);
               reject(e);
             }
-          });
+          })
+          // The ladder above can still reject — a renewal that fails, or the
+          // last attempt failing again. Whatever happens, this promise
+          // settles, which is what stops the spinner.
+          .catch(reject);
       }).finally(() => this.loadingCallback(this, false));
     } else {
       return Promise.resolve(null);
@@ -238,19 +258,18 @@ export default {
     if (!this.gapi || !this.gapi.client || !this.gapi.client.calendar) {
       return Promise.resolve([]);
     }
-    return retrieveCalendarList(this)
+    return listAccountCalendars(this)
       .catch(error => {
         if (error.status === 403 || error.status === 401) {
           return this.authorize().then(tokenResponse => {
             if (tokenResponse && tokenResponse.access_token) {
               this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
             }
-            return retrieveCalendarList(this);
+            return listAccountCalendars(this);
           });
         }
         throw error;
-      })
-      .then(entries => entries.map(mapCalendarListEntry));
+      });
   },
   deleteEvent(event, connectorRecurringEventId) {
     return this.saveEvent(event, connectorRecurringEventId, true);
@@ -335,9 +354,13 @@ function retrieveCalendarList(connector, pageToken, accumulated) {
  * on the white grid.
  *
  * One calendar that fails must not blank the whole agenda: its failure is
- * logged and it contributes no events, while the others still answer. An
- * authentication failure is rethrown instead, because it concerns every
- * calendar and the caller knows how to renew the token.
+ * logged and it contributes no events, while the others still answer — see
+ * retrieveCalendarEvents, which holds that rule and the one exception to it.
+ * Only a 401 escapes, because only a 401 means the account's credentials are
+ * what failed, and only then is the caller's renewal ladder of any use.
+ *
+ * The account-wide calendarList.list is a different matter: it fails once,
+ * for the whole account, so its failure does propagate.
  *
  * @param {Object}
  *          connector Google Connector SPI
@@ -348,27 +371,88 @@ function retrieveCalendarList(connector, pageToken, accumulated) {
  * @returns {Promise} a promise with list of Google events
  */
 function retrieveEvents(connector, periodStartDate, periodEndDate) {
-  return retrieveCalendarList(connector)
-    .then(entries => entries.map(mapCalendarListEntry))
+  return listAccountCalendars(connector)
     .then(calendars => Promise.all(calendars.map(calendar =>
-      connector.gapi.client.calendar.events.list({
-        'calendarId': calendar.id,
-        'timeMin': periodStartDate,
-        'timeMax': periodEndDate,
-        'singleEvents': true,
-        'orderBy': 'startTime'
-      }).then(events => (events.result.items || []).map(event => mapGoogleEvent(event, calendar)))
-        .catch(error => {
-          if (error.status === 403 || error.status === 401) {
-            throw error;
-          }
-          console.error(`cannot retrieve the events of Google calendar ${calendar.id}`, error);
-          return [];
-        })
-    )))
+      retrieveCalendarEvents(connector, calendar, periodStartDate, periodEndDate))))
     .then(eventLists => {
       connector.loadingCallback(connector, false);
       return mergeEventLists(eventLists);
+    });
+}
+
+/**
+ * The calendars of the connected account, fetched once and then shared.
+ *
+ * Both readers want the same list: the left panel asks through
+ * listCalendars(), and every period navigation asks again to know which
+ * calendars to read events from. Without this, a navigation cost one
+ * calendarList.list on top of its per-calendar event requests, and the
+ * consumer had already concluded the listing was worth caching — agenda's
+ * own RemoteEventConnector memoises listCalendars() per connector for
+ * exactly this reason.
+ *
+ * A failure is not remembered: the entry is cleared so the next caller
+ * retries, rather than inheriting a transient error as "this account has no
+ * calendars". The entry is also cleared by connect() and disconnect(),
+ * because the account it describes has changed.
+ *
+ * @param {Object}
+ *          connector Google Connector SPI
+ * @returns {Promise} a promise with the account's mapped calendars
+ */
+function listAccountCalendars(connector) {
+  if (!connector.calendarListing) {
+    connector.calendarListing = retrieveCalendarList(connector)
+      .then(entries => entries.map(mapCalendarListEntry))
+      .catch(error => {
+        connector.calendarListing = null;
+        throw error;
+      });
+  }
+  return connector.calendarListing;
+}
+
+/**
+ * One calendar's events over the period, mapped and tagged with that
+ * calendar.
+ *
+ * <strong>Only a 401 is rethrown.</strong> The caller renews the token and
+ * retries on what comes out of here, so rethrowing must mean "the account's
+ * credentials are the problem" — which is a 401. A 403 is not that: Google
+ * documents 403 for rateLimitExceeded, userRateLimitExceeded and
+ * quotaExceeded, none of which a new token fixes, and reading N calendars at
+ * once is precisely what makes them reachable. Rethrowing a 403 aborted the
+ * whole Promise.all, so one throttled calendar emptied a grid that every
+ * other calendar had answered, and then sent the caller round a renewal
+ * ladder that could not help. A calendar the user may not read is answered
+ * 404 by Google, which lands below with everything else.
+ *
+ * @param {Object}
+ *          connector Google Connector SPI
+ * @param {Object}
+ *          calendar the mapped calendar to read
+ * @param {Date}
+ *          periodStartDate Start date of period of events to retrieve
+ * @param {Date}
+ *          periodEndDate End date of period of events to retrieve
+ * @returns {Promise} a promise with that calendar's mapped events, empty
+ *          when it could not be read for any reason but a 401
+ */
+function retrieveCalendarEvents(connector, calendar, periodStartDate, periodEndDate) {
+  return connector.gapi.client.calendar.events.list({
+    'calendarId': calendar.id,
+    'timeMin': periodStartDate,
+    'timeMax': periodEndDate,
+    'singleEvents': true,
+    'orderBy': 'startTime'
+  })
+    .then(events => (events.result.items || []).map(event => mapGoogleEvent(event, calendar)))
+    .catch(error => {
+      if (error.status === 401) {
+        throw error;
+      }
+      console.error(`cannot retrieve the events of Google calendar ${calendar.id}`, error);
+      return [];
     });
 }
 
