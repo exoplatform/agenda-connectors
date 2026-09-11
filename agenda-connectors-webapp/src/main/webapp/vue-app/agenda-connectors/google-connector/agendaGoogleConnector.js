@@ -35,12 +35,14 @@ const PUSH_CALENDAR_ID = 'primary';
  * scope authorises both, and reading it as "cannot list" would put it on the
  * fallback while it in fact holds everything.
  *
- * WRITING_SCOPES is deliberately NOT every scope Google documents for
- * events.insert. `calendar.app.created` authorises writing only to calendars
- * the application itself created, and `calendar.events.owned` only to events
- * the user owns — neither covers a copy pushed to the account's primary
- * calendar, so reading either as canPush would claim a permission that does
- * not hold here.
+ * These are the scopes this connector can actually hold that authorise its
+ * write, not every scope Google documents for events.insert. Google also
+ * documents `calendar.app.created` — which covers only calendars the
+ * application itself created, so never the account's primary calendar — and
+ * `calendar.events.owned`, which would in fact authorise this write, since it
+ * covers calendars the user owns and primary is one. It is left out because
+ * this connector never negotiates it: a token here cannot carry it, and a set
+ * that lists scopes no grant can hold invites the reader to believe otherwise.
  */
 export const LISTING_SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
@@ -337,13 +339,25 @@ export default {
                       if (e.status === 403 || e.status === 401) {
                         if (e.status === 403) {
                           // Only the account-wide listing propagates this far
-                          // — a per-calendar refusal is swallowed below. A 403
-                          // that survived a token renewal is therefore not the
-                          // credentials: it is Google saying this grant cannot
-                          // list. Deriving it from the refusal covers what the
-                          // declared scopes cannot — a stored blob that lost
-                          // its scope before this version shipped, and the
-                          // first load before any token has been read.
+                          // — a per-calendar refusal is swallowed below — and
+                          // a 403 is never an expired or invalid credential:
+                          // Google answers 401 for that. So a refused listing
+                          // is about the grant, not the token, and no renewal
+                          // is going to change it. Deriving the capability
+                          // from the refusal covers what the declared scopes
+                          // cannot: a stored blob that lost its scope before
+                          // this version shipped, and the first load before
+                          // any token has been read.
+                          //
+                          // The known false positive is a throttled listing —
+                          // 403 also covers rateLimitExceeded — which marks a
+                          // fully entitled account as unable to list. It costs
+                          // that account one page session on its primary
+                          // calendar: applyGrantedScopes sets the flag back
+                          // from any token that declares its scopes, and the
+                          // declared default is optimistic on the next load.
+                          // Deliberately cheaper than the empty grid it
+                          // replaces.
                           markCannotList(this);
                         }
                         return this.authorize(true).then(() =>
@@ -407,7 +421,9 @@ export default {
       })
       .catch(error => {
         if (error.status === 403) {
-          // Refused again on a renewed token: the grant is what cannot list.
+          // Refused twice, and a 403 is not a credential problem — Google
+          // answers 401 for those. The grant is what cannot list. See the
+          // same inference, and its one false positive, in getEvents.
           markCannotList(this);
           return [];
         }
