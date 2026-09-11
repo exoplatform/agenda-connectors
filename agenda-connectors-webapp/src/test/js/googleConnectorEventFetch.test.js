@@ -178,6 +178,16 @@ describe('the calendar listing is fetched once and shared', () => {
       .then(() => expect(counts.calendarList).toBe(1));
   });
 
+  it('answers callers that ask before the first listing has come back', () => {
+    const counts = stubAccount({'primary': [googleEvent('a', 1)]});
+    // Both start before either resolves: the promise, not the result, is what
+    // is memoised, so this must still cost one request.
+    return Promise.all([
+      connector.listCalendars(),
+      connector.getEvents(PERIOD_START, PERIOD_END),
+    ]).then(() => expect(counts.calendarList).toBe(1));
+  });
+
   it('does not remember a failed listing', () => {
     const counts = stubAccount({'primary': [googleEvent('a', 1)]});
     let firstCall = true;
@@ -198,19 +208,29 @@ describe('the calendar listing is fetched once and shared', () => {
       });
   });
 
-  it('forgets the listing when the account is disconnected', () => {
-    stubAccount({'primary': [googleEvent('a', 1)]});
+  it('lists afresh after the account is disconnected', () => {
+    const counts = stubAccount({'primary': [googleEvent('a', 1)]});
     connector.gapi.client.getToken = () => null;
     connector.user = null;
     global.eXo = {env: {portal: {context: 'portal', rest: 'rest'}}};
     global.fetch = jest.fn(() => Promise.resolve({ok: true}));
     return connector.listCalendars()
-      .then(() => {
-        expect(connector.calendarListing).not.toBeNull();
-        return connector.disconnect();
-      })
-      // The next account to connect must be listed afresh, not answered
-      // with the calendars of the one that just left.
-      .then(() => expect(connector.calendarListing).toBeNull());
+      .then(() => connector.disconnect())
+      .then(() => connector.listCalendars())
+      // Asked through the behaviour rather than the private field: the next
+      // account must be listed afresh, never answered with the calendars of
+      // the one that just left.
+      .then(() => expect(counts.calendarList).toBe(2));
+  });
+
+  it('lists afresh after another account is connected', () => {
+    const counts = stubAccount({'primary': [googleEvent('a', 1)]});
+    connector.canPush = true;
+    connector.credential = {email: 'someone@example.com'};
+    connector.authenticate = jest.fn(() => Promise.resolve());
+    return connector.listCalendars()
+      .then(() => connector.connect(false))
+      .then(() => connector.listCalendars())
+      .then(() => expect(counts.calendarList).toBe(2));
   });
 });
