@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 import jwt_decode from 'jwt-decode';
-import {mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCalendarMapping.js';
+import {DEFAULT_CALENDAR_COLOR, mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCalendarMapping.js';
 
 /**
  * The calendar eXo copies of meetings are pushed to. Deliberately not derived
@@ -26,6 +26,23 @@ import {mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCal
  * belongs here, and only here.
  */
 const PUSH_CALENDAR_ID = 'primary';
+
+/**
+ * The one calendar a calendar.events grant can still read, used when the
+ * account's grant does not authorise listing the others.
+ *
+ * This is what the connector read before it could list at all, so an account
+ * that cannot be listed degrades to exactly the agenda it had rather than to
+ * an empty one. The colour is the shared default instead of the '#FFFFFF'
+ * the single-calendar implementation used, because a white event on a white
+ * grid was a bug, not a behaviour worth preserving.
+ */
+const PRIMARY_ONLY_FALLBACK = Object.freeze({
+  id: PUSH_CALENDAR_ID,
+  name: PUSH_CALENDAR_ID,
+  color: DEFAULT_CALENDAR_COLOR,
+  readOnly: false,
+});
 
 export default {
   name: 'agenda.googleCalendar',
@@ -97,6 +114,26 @@ export default {
   requestedScopes() {
     return `${this.SCOPE_READ} ${this.SCOPE_WRITE}`;
   },
+  /**
+   * Records what the account's current grant actually authorises.
+   * <p>
+   * Both flags are read from the grant rather than assumed, because a grant
+   * is not always what was asked for. A user may approve the read and
+   * decline the write at the consent screen; and, more consequentially, an
+   * account connected before the listing scope was requested keeps its
+   * original narrower grant for ever — a refresh token's scope is fixed at
+   * consent (RFC 6749 §6) and this connector re-serves the stored token on
+   * every page load, so nothing widens it until the user reconnects.
+   * Reading canListCalendars from the grant is what makes such an account
+   * fall back to its primary calendar instead of losing its agenda.
+   *
+   * @param {Object} tokenResponse the token whose granted scopes to read
+   * @returns {void}
+   */
+  applyGrantedScopes(tokenResponse) {
+    this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+    this.canListCalendars = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_READ);
+  },
   authorize(refresh) {
     return new Promise((resolve, reject) => {
       try {
@@ -115,7 +152,7 @@ export default {
           return refreshToken().then(refreshTokenResponse => {
             if (refreshTokenResponse && refreshTokenResponse.access_token) {
               this.gapi.client.setToken(refreshTokenResponse);
-              this.canPush = this.cientOauth.hasGrantedAllScopes(refreshTokenResponse, this.SCOPE_WRITE);
+              this.applyGrantedScopes(refreshTokenResponse);
               resolve(refreshTokenResponse);
             }
           });
@@ -123,7 +160,7 @@ export default {
           return getStoredToken().then(tokenResponse => {
             if (tokenResponse && tokenResponse.access_token) {
               this.gapi.client.setToken(tokenResponse);
-              this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+              this.applyGrantedScopes(tokenResponse);
               this.gapi.client.setToken(tokenResponse);
               resolve(tokenResponse);
             }
@@ -166,7 +203,7 @@ export default {
     if (askWriteAccess && !this.canPush) {
       return this.authorize().then(tokenResponse => {
         if (tokenResponse && tokenResponse.access_token) {
-          this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+          this.applyGrantedScopes(tokenResponse);
           return this.authenticate().then(() => {
             return new Promise((resolve, reject) => {
               if (this.credential) {
@@ -233,7 +270,7 @@ export default {
             if (e.status === 403 || e.status === 401) {
               return this.authorize().then((tokenResponse) => {
                 if (tokenResponse && tokenResponse.access_token) {
-                  this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+                  this.applyGrantedScopes(tokenResponse);
                   // Returned, so that a failure of this attempt reaches the
                   // handler below instead of becoming an unhandled rejection
                   // that leaves this promise pending for ever.
@@ -293,7 +330,7 @@ export default {
         if (error.status === 403 || error.status === 401) {
           return this.authorize().then(tokenResponse => {
             if (tokenResponse && tokenResponse.access_token) {
-              this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+              this.applyGrantedScopes(tokenResponse);
             }
             return listAccountCalendars(this);
           });
@@ -443,6 +480,11 @@ function retrieveEvents(connector, periodStartDate, periodEndDate) {
  * @returns {Promise} a promise with the account's mapped calendars
  */
 function listAccountCalendars(connector, forceRefresh) {
+  if (!connector.canListCalendars) {
+    // The grant cannot list, so there is nothing to ask Google and nothing
+    // to publish: answer the one calendar it can read, every time.
+    return Promise.resolve([PRIMARY_ONLY_FALLBACK]);
+  }
   if (forceRefresh || !connector.calendarListing) {
     connector.calendarListing = retrieveCalendarList(connector)
       .then(entries => entries.map(mapCalendarListEntry))
@@ -568,7 +610,7 @@ function checkUserStatus(connector) {
   getStoredToken().then(token => {
     if (connector.user && token?.access_token) {
       connector.isSignedIn = true;
-      connector.canPush = connector.cientOauth.hasGrantedAllScopes(token, connector.SCOPE_WRITE);
+      connector.applyGrantedScopes(token);
     }
   });
 }

@@ -52,6 +52,10 @@ function googleEvent(id, startHour) {
 function stubAccount(eventsByCalendar) {
   const counts = {calendarList: 0, events: {}};
   connector.calendarListing = null;
+  // applyGrantedScopes() writes both of these, and the connector is a
+  // singleton, so a test that narrowed the grant must not leak into the next.
+  connector.canListCalendars = true;
+  connector.canPush = false;
   connector.loadingCallback = jest.fn();
   connector.cientOauth = {hasGrantedAllScopes: () => false};
   connector.authorize = jest.fn(() => Promise.resolve({access_token: 'renewed'}));
@@ -108,6 +112,49 @@ describe('the consent asked for can actually list the calendars', () => {
 
   it('still asks for the event scope canPush is computed from', () => {
     expect(connector.requestedScopes().split(' ')).toContain(connector.SCOPE_WRITE);
+  });
+});
+
+describe('an account whose grant cannot list calendars', () => {
+  // An account connected before the listing scope was ever requested keeps
+  // its narrower grant: a refresh token's scope is fixed at consent, and the
+  // stored token is re-served on every page load. Such a user must keep the
+  // agenda they had, not lose it.
+  function stubNarrowGrant(eventsByCalendar) {
+    const counts = stubAccount(eventsByCalendar);
+    connector.cientOauth = {
+      hasGrantedAllScopes: (token, scope) => scope === connector.SCOPE_WRITE,
+    };
+    connector.applyGrantedScopes({access_token: 'old-narrow-grant'});
+    return counts;
+  }
+
+  it('reads the primary calendar rather than losing the agenda', () => {
+    const counts = stubNarrowGrant({'primary': [googleEvent('a', 1)]});
+    return connector.getEvents(PERIOD_START, PERIOD_END).then(events => {
+      expect(events.map(event => event.id)).toEqual(['a']);
+      // Nothing was asked of calendarList.list, so nothing could be refused.
+      expect(counts.calendarList).toBe(0);
+      expect(counts.events['primary']).toBe(1);
+    });
+  });
+
+  it('says it cannot list, so the left panel does not offer the section', () => {
+    stubNarrowGrant({'primary': [googleEvent('a', 1)]});
+    expect(connector.canListCalendars).toBe(false);
+  });
+
+  it('still reports the write grant it does hold', () => {
+    stubNarrowGrant({'primary': [googleEvent('a', 1)]});
+    expect(connector.canPush).toBe(true);
+  });
+
+  it('lists again once the grant includes the read scope', () => {
+    const counts = stubAccount({'primary': [googleEvent('a', 1)]});
+    connector.cientOauth = {hasGrantedAllScopes: () => true};
+    connector.applyGrantedScopes({access_token: 'widened'});
+    return connector.getEvents(PERIOD_START, PERIOD_END)
+      .then(() => expect(counts.calendarList).toBe(1));
   });
 });
 
