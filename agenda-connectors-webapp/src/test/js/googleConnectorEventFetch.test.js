@@ -89,6 +89,28 @@ function stubAccount(eventsByCalendar) {
   return counts;
 }
 
+describe('the consent asked for can actually list the calendars', () => {
+  // calendar.events authorises events.list but NOT calendarList.list, which
+  // takes calendar.readonly, calendar, calendar.calendarlist or
+  // calendar.calendarlist.readonly. Asking for events alone made the whole
+  // multi-calendar read fail for a first-time consent.
+  const LISTING_SCOPES = [
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/calendar.calendarlist',
+    'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+  ];
+
+  it('asks for a scope Google accepts for calendarList.list', () => {
+    const asked = connector.requestedScopes().split(' ');
+    expect(asked.some(scope => LISTING_SCOPES.includes(scope))).toBe(true);
+  });
+
+  it('still asks for the event scope canPush is computed from', () => {
+    expect(connector.requestedScopes().split(' ')).toContain(connector.SCOPE_WRITE);
+  });
+});
+
 describe('getEvents when one calendar of several fails', () => {
   it('still shows the other calendars when one is throttled (403)', () => {
     stubAccount({

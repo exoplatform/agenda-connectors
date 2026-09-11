@@ -36,6 +36,22 @@ export default {
   CLIENT_ID: null,
   DISCOVERY_DOCS: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
   SCOPE_WRITE: 'https://www.googleapis.com/auth/calendar.events',
+  /**
+   * The scope that lets the account's calendars be listed at all.
+   * <p>
+   * <code>calendar.events</code> authorises <code>events.list</code> — which
+   * is why reading the single <code>primary</code> calendar worked with it
+   * alone — but Google does <strong>not</strong> accept it for
+   * <code>calendarList.list</code>, which takes one of
+   * <code>calendar.readonly</code>, <code>calendar</code>,
+   * <code>calendar.calendarlist</code> or
+   * <code>calendar.calendarlist.readonly</code>. Asking for events alone
+   * therefore made the multi-calendar read fail for anyone whose consent
+   * granted exactly what was asked: the listing is refused 403, which this
+   * connector reads as an expired token and answers with a renewal that
+   * returns the very same grant.
+   */
+  SCOPE_READ: 'https://www.googleapis.com/auth/calendar.readonly',
   canConnect: true,
   canPush: false,
   canListCalendars: true,
@@ -67,6 +83,19 @@ export default {
     this.loadingCallback = loadingCallback;
 
     initGoogleConnector(this);
+  },
+  /**
+   * The scopes consent is asked for, space-separated as Google expects.
+   * <p>
+   * Kept as one accessor rather than inlined at the single call site, because
+   * the call site sits three callbacks deep inside the Google client
+   * bootstrap and is not reachable from a test, while what is asked for is
+   * exactly the thing that must not silently narrow again.
+   *
+   * @returns {String} the scope string passed to initCodeClient
+   */
+  requestedScopes() {
+    return `${this.SCOPE_READ} ${this.SCOPE_WRITE}`;
   },
   authorize(refresh) {
     return new Promise((resolve, reject) => {
@@ -583,7 +612,7 @@ function initGoogleConnector(connector) {
         connector.cientOauth = google.accounts.oauth2;
         connector.codeClient = connector.cientOauth.initCodeClient({
           client_id: connector.CLIENT_ID,
-          scope: connector.SCOPE_WRITE,
+          scope: connector.requestedScopes(),
           ux_mode: 'popup',
           error_callback: (error) => {
             connector.loadingCallback(connector, false);
