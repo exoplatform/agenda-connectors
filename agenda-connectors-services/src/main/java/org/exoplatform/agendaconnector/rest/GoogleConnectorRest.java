@@ -141,13 +141,28 @@ public class GoogleConnectorRest implements ResourceContainer {
                                                                    googleRemoteProvider.getApiKey(),
                                                                    googleRemoteProvider.getSecretKey()).execute();
       response.set("refresh_token", refreshToken);
-      carryForwardScope(response, responseMap);
-      googleConnectorService.saveTokenResponse(userName, response.toString());
+      saveRefreshedToken(userName, response, responseMap);
       return Response.ok(response).build();
     } catch (Exception e) {
       LOG.error("Error while refreshing the access tokens", e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
+  }
+
+  /**
+   * Stores a refreshed token, keeping the scopes the previous one declared.
+   * <p>
+   * Merging and saving are one step on purpose: what has to be true of the
+   * stored blob is that it always declares its scopes, and a carry-forward
+   * that some future caller could save around would not deliver that.
+   *
+   * @param userName the user whose token is being replaced
+   * @param response the freshly refreshed token, modified in place
+   * @param storedTokenResponse the previously stored token as parsed JSON
+   */
+  void saveRefreshedToken(String userName, GoogleTokenResponse response, Map<?, ?> storedTokenResponse) {
+    carryForwardScope(response, storedTokenResponse);
+    googleConnectorService.saveTokenResponse(userName, response.toString());
   }
 
   /**
@@ -165,7 +180,7 @@ public class GoogleConnectorRest implements ResourceContainer {
    * @param response the freshly refreshed token, modified in place
    * @param storedTokenResponse the previously stored token as parsed JSON
    */
-  protected static void carryForwardScope(GoogleTokenResponse response, Map<?, ?> storedTokenResponse) {
+  static void carryForwardScope(GoogleTokenResponse response, Map<?, ?> storedTokenResponse) {
     if (response == null || !StringUtils.isBlank(response.getScope())) {
       return;
     }

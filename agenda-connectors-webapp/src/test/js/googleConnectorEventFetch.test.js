@@ -206,6 +206,35 @@ describe('an account whose grant cannot list calendars', () => {
     });
   });
 
+  it('widens the flags from the token a renewal returns', () => {
+    // The whole delivery rests on a capability derived from a grant and
+    // recomputed whenever a token is obtained. In production the stored and
+    // refreshed tokens always declare their scopes, so the renewal ladder
+    // genuinely recomputes both flags — this is the only test that walks
+    // that path end to end.
+    const counts = stubNarrowGrant({
+      'primary': googleError(401),
+      'shared@group.calendar.google.com': [googleEvent('b', 2)],
+    });
+    expect(connector.canListCalendars).toBe(false);
+    connector.authorize = jest.fn(() => {
+      connector.gapi.client.calendar.events.list = options => {
+        counts.events[options.calendarId] = (counts.events[options.calendarId] || 0) + 1;
+        return Promise.resolve({result: {items: [googleEvent('a', 1)]}});
+      };
+      return Promise.resolve({
+        access_token: 'renewed-and-widened',
+        scope: `${connector.SCOPE_READ} ${connector.SCOPE_WRITE}`,
+      });
+    });
+    return connector.getEvents(PERIOD_START, PERIOD_END).then(() => {
+      expect(connector.canListCalendars).toBe(true);
+      expect(connector.canPush).toBe(true);
+      // It listed the account on the retry instead of staying on primary.
+      expect(counts.calendarList).toBeGreaterThan(0);
+    });
+  });
+
   it('recognises the broader calendar scope as authorising both', () => {
     const counts = stubAccount({
       'primary': [googleEvent('a', 1)],

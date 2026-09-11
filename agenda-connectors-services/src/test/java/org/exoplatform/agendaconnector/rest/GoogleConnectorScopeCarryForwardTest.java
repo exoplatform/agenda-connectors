@@ -20,10 +20,17 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
+import org.exoplatform.agenda.service.AgendaRemoteEventService;
+import org.exoplatform.agendaconnector.service.GoogleConnectorService;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 /**
  * The stored token blob is replaced wholesale by every refresh response, and
@@ -90,5 +97,22 @@ public class GoogleConnectorScopeCarryForwardTest {
 
     GoogleConnectorRest.carryForwardScope(refreshed, storedToken("   "));
     assertNull(refreshed.getScope());
+  }
+
+  @Test
+  public void shouldStoreATokenThatStillDeclaresTheGrantedScopes() {
+    GoogleConnectorService googleConnectorService = mock(GoogleConnectorService.class);
+    GoogleConnectorRest rest = new GoogleConnectorRest(mock(AgendaRemoteEventService.class), googleConnectorService);
+    GoogleTokenResponse refreshed = new GoogleTokenResponse();
+    refreshed.setAccessToken("a-fresh-access-token");
+
+    rest.saveRefreshedToken("jdoe", refreshed, storedToken(GRANTED));
+
+    // What has to be true of the stored blob is that it declares its scopes:
+    // everything the client may do is derived from them, and a capability
+    // that selects a silent fallback has no error path to reveal their loss.
+    ArgumentCaptor<String> saved = ArgumentCaptor.forClass(String.class);
+    verify(googleConnectorService).saveTokenResponse(eq("jdoe"), saved.capture());
+    assertTrue(saved.getValue(), saved.getValue().contains(GRANTED));
   }
 }
