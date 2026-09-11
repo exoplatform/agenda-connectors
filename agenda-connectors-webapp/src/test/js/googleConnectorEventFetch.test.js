@@ -164,6 +164,38 @@ describe('an account whose grant cannot list calendars', () => {
     expect(connector.canPush).toBe(true);
   });
 
+  it('degrades to primary when Google refuses to list, without losing the agenda', () => {
+    // The path this whole change exists for, walked end to end and never
+    // covered before: an already-connected account loads a page, its grant
+    // cannot list, and it must keep the agenda develop gives it today rather
+    // than an empty grid. The flag is NOT pre-set — it is derived from the
+    // refusal, which is what makes this work for a stored token that declares
+    // no scopes at all.
+    const counts = stubAccount({'primary': [googleEvent('a', 1)]});
+    connector.gapi.client.calendar.calendarList.list = () => {
+      counts.calendarList++;
+      return Promise.reject(googleError(403));
+    };
+    // Scopeless on purpose: applyGrantedScopes then declines to narrow
+    // anything, so the only thing that can conclude "this grant cannot list"
+    // is the refusal itself. That is the case a stored blob stripped before
+    // this version shipped actually presents.
+    connector.authorize = jest.fn(() => Promise.resolve({
+      access_token: 'a-renewed-but-still-narrow-token',
+    }));
+    return connector.getEvents(PERIOD_START, PERIOD_END).then(events => {
+      expect(events.map(event => event.id)).toEqual(['a']);
+      expect(connector.canListCalendars).toBe(false);
+      // And the panel is offered nothing rather than a row called 'primary'.
+      return connector.listCalendars().then(calendars => expect(calendars).toEqual([]));
+    });
+  });
+
+  it('offers the panel nothing when the grant cannot list', () => {
+    stubNarrowGrant({'primary': [googleEvent('a', 1)]});
+    return connector.listCalendars().then(calendars => expect(calendars).toEqual([]));
+  });
+
   it('stops claiming it cannot list once the account is disconnected', () => {
     stubNarrowGrant({'primary': [googleEvent('a', 1)]});
     expect(connector.canListCalendars).toBe(false);
@@ -383,11 +415,13 @@ describe('the calendar listing is fetched once and shared', () => {
       }
       return Promise.resolve({result: {items: [{id: 'primary', summary: 'primary', backgroundColor: '#039BE5', accessRole: 'owner'}]}});
     };
-    return connector.listCalendars()
-      .catch(() => connector.listCalendars())
-      .then(calendars => {
+    // Driven through getEvents, the only reader of the published entry:
+    // listCalendars() force-refreshes, so it can never observe the reset.
+    return connector.getEvents(PERIOD_START, PERIOD_END)
+      .catch(() => connector.getEvents(PERIOD_START, PERIOD_END))
+      .then(events => {
         // A transient failure must not be cached as "this account has no calendars".
-        expect(calendars.map(calendar => calendar.id)).toEqual(['primary']);
+        expect(events.map(event => event.id)).toEqual(['a']);
         expect(counts.calendarList).toBe(2);
       });
   });

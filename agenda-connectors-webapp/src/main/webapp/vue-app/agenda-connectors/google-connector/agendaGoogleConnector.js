@@ -28,12 +28,19 @@ import {DEFAULT_CALENDAR_COLOR, mapCalendarListEntry, mapGoogleEvent, mergeEvent
 const PUSH_CALENDAR_ID = 'primary';
 
 /**
- * Every scope Google accepts for calendarList.list, and every scope it
- * accepts for writing an event. A grant is checked against the whole set
- * rather than against the one member this connector happens to request:
- * an account holding the broader `calendar` scope authorises both, and
- * reading it as "cannot list" would put it on the fallback while it in fact
- * holds everything.
+ * Every scope Google accepts for calendarList.list, and every scope that
+ * authorises writing to the calendar this connector writes to. A grant is
+ * checked against the whole set rather than against the one member this
+ * connector happens to request: an account holding the broader `calendar`
+ * scope authorises both, and reading it as "cannot list" would put it on the
+ * fallback while it in fact holds everything.
+ *
+ * WRITING_SCOPES is deliberately NOT every scope Google documents for
+ * events.insert. `calendar.app.created` authorises writing only to calendars
+ * the application itself created, and `calendar.events.owned` only to events
+ * the user owns — neither covers a copy pushed to the account's primary
+ * calendar, so reading either as canPush would claim a permission that does
+ * not hold here.
  */
 export const LISTING_SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
@@ -328,6 +335,17 @@ export default {
                     .then(gEvents => resolve(gEvents))
                     .catch((e) => {
                       if (e.status === 403 || e.status === 401) {
+                        if (e.status === 403) {
+                          // Only the account-wide listing propagates this far
+                          // — a per-calendar refusal is swallowed below. A 403
+                          // that survived a token renewal is therefore not the
+                          // credentials: it is Google saying this grant cannot
+                          // list. Deriving it from the refusal covers what the
+                          // declared scopes cannot — a stored blob that lost
+                          // its scope before this version shipped, and the
+                          // first load before any token has been read.
+                          markCannotList(this);
+                        }
                         return this.authorize(true).then(() =>
                           retrieveEvents(this, periodStartDate, periodEndDate)
                             .then(gEvents => resolve(gEvents)));
@@ -382,10 +400,26 @@ export default {
             if (tokenResponse && tokenResponse.access_token) {
               this.applyGrantedScopes(tokenResponse);
             }
-            return listAccountCalendars(this);
+            return listAccountCalendars(this, true);
           });
         }
         throw error;
+      })
+      .catch(error => {
+        if (error.status === 403) {
+          // Refused again on a renewed token: the grant is what cannot list.
+          markCannotList(this);
+          return [];
+        }
+        throw error;
+      })
+      // Whatever route got here — a grant that already could not list, or a
+      // renewal that read one mid-flight — listAccountCalendars answers with
+      // the primary-only fallback. That belongs to the event path: through
+      // the panel it becomes a Google section holding one row labelled with
+      // a raw API identifier.
+      .then(calendars => {
+        return this.canListCalendars ? calendars : [];
       });
   },
   deleteEvent(event, connectorRecurringEventId) {
@@ -498,6 +532,19 @@ function retrieveEvents(connector, periodStartDate, periodEndDate) {
 }
 
 /**
+ * Records that this account's grant cannot list calendars, and drops the
+ * listing it can no longer answer.
+ *
+ * @param {Object}
+ *          connector Google Connector SPI
+ * @returns {void}
+ */
+function markCannotList(connector) {
+  connector.canListCalendars = false;
+  connector.calendarListing = null;
+}
+
+/**
  * The calendars of the connected account, fetched once and then shared.
  *
  * Both readers want the same list: the left panel asks through
@@ -536,12 +583,18 @@ function listAccountCalendars(connector, forceRefresh) {
     return Promise.resolve([PRIMARY_ONLY_FALLBACK]);
   }
   if (forceRefresh || !connector.calendarListing) {
-    connector.calendarListing = retrieveCalendarList(connector)
+    const listing = retrieveCalendarList(connector)
       .then(entries => entries.map(mapCalendarListEntry))
       .catch(error => {
-        connector.calendarListing = null;
+        // Only when this listing is still the published one: a newer call may
+        // have replaced it while this one was in flight, and wiping that would
+        // cost an extra request for nothing.
+        if (connector.calendarListing === listing) {
+          connector.calendarListing = null;
+        }
         throw error;
       });
+    connector.calendarListing = listing;
   }
   return connector.calendarListing;
 }
