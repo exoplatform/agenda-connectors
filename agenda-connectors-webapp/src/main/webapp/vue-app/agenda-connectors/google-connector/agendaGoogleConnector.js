@@ -15,7 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 import jwt_decode from 'jwt-decode';
-import {mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCalendarMapping.js';
+import {DEFAULT_CALENDAR_COLOR, mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCalendarMapping.js';
 
 /**
  * The calendar eXo copies of meetings are pushed to. Deliberately not derived
@@ -27,6 +27,52 @@ import {mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCal
  */
 const PUSH_CALENDAR_ID = 'primary';
 
+/**
+ * Every scope Google accepts for calendarList.list, and every scope that
+ * authorises writing to the calendar this connector writes to. A grant is
+ * checked against the whole set rather than against the one member this
+ * connector happens to request: an account holding the broader `calendar`
+ * scope authorises both, and reading it as "cannot list" would put it on the
+ * fallback while it in fact holds everything.
+ *
+ * These are the scopes this connector can actually hold that authorise its
+ * write, not every scope Google documents for events.insert. Google also
+ * documents `calendar.app.created` — which covers only calendars the
+ * application itself created, so never the account's primary calendar — and
+ * `calendar.events.owned`, which would in fact authorise this write, since it
+ * covers calendars the user owns and primary is one. It is left out because
+ * this connector never negotiates it: a token here cannot carry it, and a set
+ * that lists scopes no grant can hold invites the reader to believe otherwise.
+ */
+export const LISTING_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/calendar.calendarlist',
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+];
+
+export const WRITING_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar',
+];
+
+/**
+ * The one calendar a calendar.events grant can still read, used when the
+ * account's grant does not authorise listing the others.
+ *
+ * This is what the connector read before it could list at all, so an account
+ * that cannot be listed degrades to exactly the agenda it had rather than to
+ * an empty one. The colour is the shared default instead of the '#FFFFFF'
+ * the single-calendar implementation used, because a white event on a white
+ * grid was a bug, not a behaviour worth preserving.
+ */
+const PRIMARY_ONLY_FALLBACK = Object.freeze({
+  id: PUSH_CALENDAR_ID,
+  name: PUSH_CALENDAR_ID,
+  color: DEFAULT_CALENDAR_COLOR,
+  readOnly: false,
+});
+
 export default {
   name: 'agenda.googleCalendar',
   description: 'agenda.googleCalendar.description',
@@ -36,9 +82,35 @@ export default {
   CLIENT_ID: null,
   DISCOVERY_DOCS: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
   SCOPE_WRITE: 'https://www.googleapis.com/auth/calendar.events',
+  /**
+   * The scope that lets the account's calendars be listed at all.
+   * <p>
+   * <code>calendar.events</code> authorises <code>events.list</code> — which
+   * is why reading the single <code>primary</code> calendar worked with it
+   * alone — but Google does <strong>not</strong> accept it for
+   * <code>calendarList.list</code>, which takes one of
+   * <code>calendar.readonly</code>, <code>calendar</code>,
+   * <code>calendar.calendarlist</code> or
+   * <code>calendar.calendarlist.readonly</code>. Asking for events alone
+   * therefore made the multi-calendar read fail for anyone whose consent
+   * granted exactly what was asked: the listing is refused 403, which this
+   * connector reads as an expired token and answers with a renewal that
+   * returns the very same grant.
+   */
+  SCOPE_READ: 'https://www.googleapis.com/auth/calendar.readonly',
   canConnect: true,
   canPush: false,
   canListCalendars: true,
+  /**
+   * The in-flight or resolved calendar listing of the connected account,
+   * published by listCalendars() and read by every event fetch, so that a
+   * period navigation costs one request per calendar and not one more to
+   * re-list them. Reset whenever the account behind it changes — connecting
+   * or disconnecting — and cleared on failure so a transient error is not
+   * remembered as the account's calendars. See listAccountCalendars for why
+   * only the event path reads it.
+   */
+  calendarListing: null,
   initialized: false,
   isSignedIn: false,
   pushing: false,
@@ -58,6 +130,55 @@ export default {
 
     initGoogleConnector(this);
   },
+  /**
+   * The scopes consent is asked for, space-separated as Google expects.
+   * <p>
+   * Kept as one accessor rather than inlined at the single call site, because
+   * the call site sits three callbacks deep inside the Google client
+   * bootstrap and is not reachable from a test, while what is asked for is
+   * exactly the thing that must not silently narrow again.
+   *
+   * @returns {String} the scope string passed to initCodeClient
+   */
+  requestedScopes() {
+    return `${this.SCOPE_READ} ${this.SCOPE_WRITE}`;
+  },
+  /**
+   * Records what the account's current grant actually authorises.
+   * <p>
+   * Both flags are read from the grant rather than assumed, because a grant
+   * is not always what was asked for. A user may approve the read and
+   * decline the write at the consent screen; and, more consequentially, an
+   * account connected before the listing scope was requested keeps its
+   * original narrower grant for ever — a refresh token's scope is fixed at
+   * consent (RFC 6749 §6) and this connector re-serves the stored token on
+   * every page load, so nothing widens it until the user reconnects.
+   * Reading canListCalendars from the grant is what makes such an account
+   * fall back to its primary calendar instead of losing its agenda.
+   *
+   * @param {Object} tokenResponse the token whose granted scopes to read
+   * @returns {void}
+   */
+  applyGrantedScopes(tokenResponse) {
+    // A token that declares no scopes says nothing about what was granted,
+    // and "says nothing" must not be read as "granted nothing". The stored
+    // blob is overwritten by every token refresh, and RFC 6749 §5.1 makes
+    // the scope of a refresh response OPTIONAL precisely when it is
+    // unchanged — so a refresh that omits it would otherwise convict an
+    // account of holding no permissions at all, permanently: canPush would
+    // be recoverable through the push flow, canListCalendars would not,
+    // because the fallback it selects raises no error that could correct it.
+    // Leaving both untouched keeps their current value — which, on a fresh
+    // page, is the declared default rather than a memory of anything. The
+    // server carries the granted scopes forward across a refresh so that a
+    // stored token always declares them; this guard is what keeps a token
+    // that still says nothing from being read as a refusal.
+    if (!tokenResponse || !tokenResponse.scope) {
+      return;
+    }
+    this.canPush = this.cientOauth.hasGrantedAnyScope(tokenResponse, ...WRITING_SCOPES);
+    this.canListCalendars = this.cientOauth.hasGrantedAnyScope(tokenResponse, ...LISTING_SCOPES);
+  },
   authorize(refresh) {
     return new Promise((resolve, reject) => {
       try {
@@ -76,7 +197,7 @@ export default {
           return refreshToken().then(refreshTokenResponse => {
             if (refreshTokenResponse && refreshTokenResponse.access_token) {
               this.gapi.client.setToken(refreshTokenResponse);
-              this.canPush = this.cientOauth.hasGrantedAllScopes(refreshTokenResponse, this.SCOPE_WRITE);
+              this.applyGrantedScopes(refreshTokenResponse);
               resolve(refreshTokenResponse);
             }
           });
@@ -84,7 +205,7 @@ export default {
           return getStoredToken().then(tokenResponse => {
             if (tokenResponse && tokenResponse.access_token) {
               this.gapi.client.setToken(tokenResponse);
-              this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+              this.applyGrantedScopes(tokenResponse);
               this.gapi.client.setToken(tokenResponse);
               resolve(tokenResponse);
             }
@@ -122,10 +243,12 @@ export default {
   },
   connect(askWriteAccess) {
     this.loadingCallback(this, true);
+    // A different account answers with different calendars.
+    this.calendarListing = null;
     if (askWriteAccess && !this.canPush) {
       return this.authorize().then(tokenResponse => {
         if (tokenResponse && tokenResponse.access_token) {
-          this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+          this.applyGrantedScopes(tokenResponse);
           return this.authenticate().then(() => {
             return new Promise((resolve, reject) => {
               if (this.credential) {
@@ -151,23 +274,39 @@ export default {
     }
   },
   /**
-   * Forgets that write access was granted.
+   * Forgets what the disconnected account's grant authorised.
    * <p>
-   * canPush is not a property of this connector but of the account attached to
-   * it: it records that the user granted the write scope, and it is recomputed
-   * from hasGrantedAllScopes() every time a token is obtained. Disconnecting
-   * revokes that grant, so keeping the flag would claim a permission that no
-   * longer exists — connect() reads it to decide whether to ask for write
-   * access, and would skip asking, leaving the client without a usable token
-   * until the first copy failed.
+   * Neither flag is a property of this connector; both belong to the account
+   * attached to it, and both are recomputed from the grant every time a token
+   * is obtained. Disconnecting revokes that grant, so keeping either would
+   * claim a permission that no longer exists.
+   * <p>
+   * They are forgotten differently on purpose. canPush goes to false, because
+   * connect() reads it to decide whether to ask for write access and would
+   * otherwise skip asking, leaving the client without a usable token until
+   * the first copy failed. canListCalendars goes back to its optimistic
+   * default, so the next account's grant is read rather than inherited —
+   * false would be worse than stale here, since the fallback it selects
+   * raises no error that anything on a normal page could correct.
    *
    * @returns {void}
    */
   resetPushAbility() {
     this.canPush = false;
+    // canListCalendars is grant-derived in exactly the same way, and the
+    // grant is what disconnecting throws away. It goes back to its
+    // optimistic default rather than to false: the next account's grant is
+    // then read from the token it returns, instead of the next account
+    // inheriting a refusal that belonged to the previous one. Leaving it
+    // false would be worse than stale — the listing path raises no error by
+    // design once it is false, so nothing on a normal page would ever put
+    // it back.
+    this.canListCalendars = true;
   },
   disconnect() {
     this.loadingCallback(this, true);
+    // The calendars listed here belong to the account being disconnected.
+    this.calendarListing = null;
     return removeToken().then(() => {
       if (this.gapi.client.getToken() && this.cientOauth || this.user) {
         this.cientOauth.revoke(this.gapi.client.getToken());
@@ -190,27 +329,57 @@ export default {
             if (e.status === 403 || e.status === 401) {
               return this.authorize().then((tokenResponse) => {
                 if (tokenResponse && tokenResponse.access_token) {
-                  this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-                  retrieveEvents(this, periodStartDate, periodEndDate)
+                  this.applyGrantedScopes(tokenResponse);
+                  // Returned, so that a failure of this attempt reaches the
+                  // handler below instead of becoming an unhandled rejection
+                  // that leaves this promise pending for ever.
+                  return retrieveEvents(this, periodStartDate, periodEndDate)
                     .then(gEvents => resolve(gEvents))
                     .catch((e) => {
                       if (e.status === 403 || e.status === 401) {
-                        return this.authorize(true).then(() => {
+                        if (e.status === 403) {
+                          // Only the account-wide listing propagates this far
+                          // — a per-calendar refusal is swallowed below — and
+                          // a 403 is never an expired or invalid credential:
+                          // Google answers 401 for that. So a refused listing
+                          // is about the grant, not the token, and no renewal
+                          // is going to change it. Deriving the capability
+                          // from the refusal covers what the declared scopes
+                          // cannot: a stored blob that lost its scope before
+                          // this version shipped, and the first load before
+                          // any token has been read.
+                          //
+                          // The known false positive is a throttled listing —
+                          // 403 also covers rateLimitExceeded — which marks a
+                          // fully entitled account as unable to list. It costs
+                          // that account one page session on its primary
+                          // calendar: applyGrantedScopes sets the flag back
+                          // from any token that declares its scopes, and the
+                          // declared default is optimistic on the next load.
+                          // Deliberately cheaper than the empty grid it
+                          // replaces.
+                          markCannotList(this);
+                        }
+                        return this.authorize(true).then(() =>
                           retrieveEvents(this, periodStartDate, periodEndDate)
-                            .then(gEvents => resolve(gEvents));
-                        });
+                            .then(gEvents => resolve(gEvents)));
                       } else {
-                        this.loadingCallback(this, false);
                         reject(e);
                       }
                     });
                 }
+                // Re-authorising answered no usable token: there is nothing
+                // left to try, and the caller must not be left waiting.
+                reject(e);
               });
             } else {
-              this.loadingCallback(this, false);
               reject(e);
             }
-          });
+          })
+          // The ladder above can still reject — a renewal that fails, or the
+          // last attempt failing again. Whatever happens, this promise
+          // settles, which is what stops the spinner.
+          .catch(reject);
       }).finally(() => this.loadingCallback(this, false));
     } else {
       return Promise.resolve(null);
@@ -238,19 +407,36 @@ export default {
     if (!this.gapi || !this.gapi.client || !this.gapi.client.calendar) {
       return Promise.resolve([]);
     }
-    return retrieveCalendarList(this)
+    return listAccountCalendars(this, true)
       .catch(error => {
         if (error.status === 403 || error.status === 401) {
           return this.authorize().then(tokenResponse => {
             if (tokenResponse && tokenResponse.access_token) {
-              this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+              this.applyGrantedScopes(tokenResponse);
             }
-            return retrieveCalendarList(this);
+            return listAccountCalendars(this, true);
           });
         }
         throw error;
       })
-      .then(entries => entries.map(mapCalendarListEntry));
+      .catch(error => {
+        if (error.status === 403) {
+          // Refused twice, and a 403 is not a credential problem — Google
+          // answers 401 for those. The grant is what cannot list. See the
+          // same inference, and its one false positive, in getEvents.
+          markCannotList(this);
+          return [];
+        }
+        throw error;
+      })
+      // Whatever route got here — a grant that already could not list, or a
+      // renewal that read one mid-flight — listAccountCalendars answers with
+      // the primary-only fallback. That belongs to the event path: through
+      // the panel it becomes a Google section holding one row labelled with
+      // a raw API identifier.
+      .then(calendars => {
+        return this.canListCalendars ? calendars : [];
+      });
   },
   deleteEvent(event, connectorRecurringEventId) {
     return this.saveEvent(event, connectorRecurringEventId, true);
@@ -335,9 +521,13 @@ function retrieveCalendarList(connector, pageToken, accumulated) {
  * on the white grid.
  *
  * One calendar that fails must not blank the whole agenda: its failure is
- * logged and it contributes no events, while the others still answer. An
- * authentication failure is rethrown instead, because it concerns every
- * calendar and the caller knows how to renew the token.
+ * logged and it contributes no events, while the others still answer — see
+ * retrieveCalendarEvents, which holds that rule and the one exception to it.
+ * Only a 401 escapes, because only a 401 means the account's credentials are
+ * what failed, and only then is the caller's renewal ladder of any use.
+ *
+ * The account-wide calendarList.list is a different matter: it fails once,
+ * for the whole account, so its failure does propagate.
  *
  * @param {Object}
  *          connector Google Connector SPI
@@ -348,27 +538,124 @@ function retrieveCalendarList(connector, pageToken, accumulated) {
  * @returns {Promise} a promise with list of Google events
  */
 function retrieveEvents(connector, periodStartDate, periodEndDate) {
-  return retrieveCalendarList(connector)
-    .then(entries => entries.map(mapCalendarListEntry))
+  return listAccountCalendars(connector)
     .then(calendars => Promise.all(calendars.map(calendar =>
-      connector.gapi.client.calendar.events.list({
-        'calendarId': calendar.id,
-        'timeMin': periodStartDate,
-        'timeMax': periodEndDate,
-        'singleEvents': true,
-        'orderBy': 'startTime'
-      }).then(events => (events.result.items || []).map(event => mapGoogleEvent(event, calendar)))
-        .catch(error => {
-          if (error.status === 403 || error.status === 401) {
-            throw error;
-          }
-          console.error(`cannot retrieve the events of Google calendar ${calendar.id}`, error);
-          return [];
-        })
-    )))
+      retrieveCalendarEvents(connector, calendar, periodStartDate, periodEndDate))))
     .then(eventLists => {
       connector.loadingCallback(connector, false);
       return mergeEventLists(eventLists);
+    });
+}
+
+/**
+ * Records that this account's grant cannot list calendars, and drops the
+ * listing it can no longer answer.
+ *
+ * @param {Object}
+ *          connector Google Connector SPI
+ * @returns {void}
+ */
+function markCannotList(connector) {
+  connector.canListCalendars = false;
+  connector.calendarListing = null;
+}
+
+/**
+ * The calendars of the connected account, fetched once and then shared.
+ *
+ * Both readers want the same list: the left panel asks through
+ * listCalendars(), and every period navigation asks again to know which
+ * calendars to read events from. Without this, a navigation cost one
+ * calendarList.list on top of its per-calendar event requests, and the
+ * consumer had already concluded the listing was worth caching — agenda's
+ * own RemoteEventConnector memoises listCalendars() per connector for
+ * exactly this reason.
+ *
+ * <strong>Who refreshes it.</strong> listCalendars() always re-lists and
+ * republishes the result here, because that is the call agenda makes when it
+ * wants current data — the left panel binds it to its agenda-refresh and
+ * agenda-refresh-personal-calendars signals precisely so a calendar created,
+ * renamed or unshared in Google appears without a reload. Event fetches read
+ * the published entry instead, which is where the saved request actually
+ * was: a period navigation no longer re-lists the account on top of its
+ * per-calendar event requests. Memoising both would have made those refresh
+ * signals inert for the life of the page.
+ *
+ * A failure is not remembered: the entry is cleared so the next caller
+ * retries, rather than inheriting a transient error as "this account has no
+ * calendars". The entry is also cleared by connect() and disconnect(),
+ * because the account it describes has changed.
+ *
+ * @param {Object}
+ *          connector Google Connector SPI
+ * @param {Boolean}
+ *          forceRefresh re-list even when an entry is already published
+ * @returns {Promise} a promise with the account's mapped calendars
+ */
+function listAccountCalendars(connector, forceRefresh) {
+  if (!connector.canListCalendars) {
+    // The grant cannot list, so there is nothing to ask Google and nothing
+    // to publish: answer the one calendar it can read, every time.
+    return Promise.resolve([PRIMARY_ONLY_FALLBACK]);
+  }
+  if (forceRefresh || !connector.calendarListing) {
+    const listing = retrieveCalendarList(connector)
+      .then(entries => entries.map(mapCalendarListEntry))
+      .catch(error => {
+        // Only when this listing is still the published one: a newer call may
+        // have replaced it while this one was in flight, and wiping that would
+        // cost an extra request for nothing.
+        if (connector.calendarListing === listing) {
+          connector.calendarListing = null;
+        }
+        throw error;
+      });
+    connector.calendarListing = listing;
+  }
+  return connector.calendarListing;
+}
+
+/**
+ * One calendar's events over the period, mapped and tagged with that
+ * calendar.
+ *
+ * <strong>Only a 401 is rethrown.</strong> The caller renews the token and
+ * retries on what comes out of here, so rethrowing must mean "the account's
+ * credentials are the problem" — which is a 401. A 403 is not that: Google
+ * documents 403 for rateLimitExceeded, userRateLimitExceeded and
+ * quotaExceeded, none of which a new token fixes, and reading N calendars at
+ * once is precisely what makes them reachable. Rethrowing a 403 aborted the
+ * whole Promise.all, so one throttled calendar emptied a grid that every
+ * other calendar had answered, and then sent the caller round a renewal
+ * ladder that could not help. A calendar the user may not read is answered
+ * 404 by Google, which lands below with everything else.
+ *
+ * @param {Object}
+ *          connector Google Connector SPI
+ * @param {Object}
+ *          calendar the mapped calendar to read
+ * @param {Date}
+ *          periodStartDate Start date of period of events to retrieve
+ * @param {Date}
+ *          periodEndDate End date of period of events to retrieve
+ * @returns {Promise} a promise with that calendar's mapped events, empty
+ *          when it could not be read for any reason but a 401
+ */
+function retrieveCalendarEvents(connector, calendar, periodStartDate, periodEndDate) {
+  return connector.gapi.client.calendar.events.list({
+    'calendarId': calendar.id,
+    'timeMin': periodStartDate,
+    'timeMax': periodEndDate,
+    'singleEvents': true,
+    'orderBy': 'startTime'
+  })
+    .then(events => (events.result.items || []).map(event => mapGoogleEvent(event, calendar)))
+    .catch(error => {
+      if (error.status === 401) {
+        throw error;
+      }
+      console.error(`cannot retrieve the events of Google calendar ${calendar.id}`, error);
+      return [];
     });
 }
 
@@ -442,7 +729,7 @@ function checkUserStatus(connector) {
   getStoredToken().then(token => {
     if (connector.user && token?.access_token) {
       connector.isSignedIn = true;
-      connector.canPush = connector.cientOauth.hasGrantedAllScopes(token, connector.SCOPE_WRITE);
+      connector.applyGrantedScopes(token);
     }
   });
 }
@@ -486,7 +773,7 @@ function initGoogleConnector(connector) {
         connector.cientOauth = google.accounts.oauth2;
         connector.codeClient = connector.cientOauth.initCodeClient({
           client_id: connector.CLIENT_ID,
-          scope: connector.SCOPE_WRITE,
+          scope: connector.requestedScopes(),
           ux_mode: 'popup',
           error_callback: (error) => {
             connector.loadingCallback(connector, false);

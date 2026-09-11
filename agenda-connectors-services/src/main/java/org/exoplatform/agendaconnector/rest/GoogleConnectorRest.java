@@ -141,11 +141,52 @@ public class GoogleConnectorRest implements ResourceContainer {
                                                                    googleRemoteProvider.getApiKey(),
                                                                    googleRemoteProvider.getSecretKey()).execute();
       response.set("refresh_token", refreshToken);
-      googleConnectorService.saveTokenResponse(userName, response.toString());
+      saveRefreshedToken(userName, response, responseMap);
       return Response.ok(response).build();
     } catch (Exception e) {
       LOG.error("Error while refreshing the access tokens", e);
       return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+    }
+  }
+
+  /**
+   * Stores a refreshed token, keeping the scopes the previous one declared.
+   * <p>
+   * Merging and saving are one step on purpose: what has to be true of the
+   * stored blob is that it always declares its scopes, and a carry-forward
+   * that some future caller could save around would not deliver that.
+   *
+   * @param userName the user whose token is being replaced
+   * @param response the freshly refreshed token, modified in place
+   * @param storedTokenResponse the previously stored token as parsed JSON
+   */
+  void saveRefreshedToken(String userName, GoogleTokenResponse response, Map<?, ?> storedTokenResponse) {
+    carryForwardScope(response, storedTokenResponse);
+    googleConnectorService.saveTokenResponse(userName, response.toString());
+  }
+
+  /**
+   * Keeps the granted scopes on a refreshed token when the refresh response
+   * does not restate them.
+   * <p>
+   * The stored blob is replaced wholesale by the refresh response, and
+   * RFC 6749 §5.1 makes <code>scope</code> OPTIONAL on that response
+   * precisely when it is identical to what was granted. Losing it would make
+   * the client read the account as holding no permissions at all, which is
+   * how a capability derived from the grant gets switched off for good. This
+   * is the same carry-forward the line above already performs for the refresh
+   * token, and for the same reason.
+   *
+   * @param response the freshly refreshed token, modified in place
+   * @param storedTokenResponse the previously stored token as parsed JSON
+   */
+  static void carryForwardScope(GoogleTokenResponse response, Map<?, ?> storedTokenResponse) {
+    if (response == null || !StringUtils.isBlank(response.getScope())) {
+      return;
+    }
+    Object storedScope = storedTokenResponse == null ? null : storedTokenResponse.get("scope");
+    if (storedScope instanceof String scope && !StringUtils.isBlank(scope)) {
+      response.setScope(scope);
     }
   }
 
