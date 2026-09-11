@@ -14,7 +14,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <gnu.org/licenses>.
  */
-import connector from '../../main/webapp/vue-app/agenda-connectors/google-connector/agendaGoogleConnector.js';
+import connector, {
+  LISTING_SCOPES,
+  WRITING_SCOPES,
+} from '../../main/webapp/vue-app/agenda-connectors/google-connector/agendaGoogleConnector.js';
 
 /**
  * What the fan-out does when one calendar of many refuses to answer, and
@@ -35,9 +38,10 @@ const PERIOD_END = new Date('2026-09-30T23:59:59Z');
  * @returns {Object} a stand-in for google.accounts.oauth2
  */
 function grantReader() {
+  const granted = token => ((token && token.scope) || '').split(' ').filter(Boolean);
   return {
-    hasGrantedAllScopes: (token, scope) =>
-      ((token && token.scope) || '').split(' ').filter(Boolean).includes(scope),
+    hasGrantedAllScopes: (token, ...scopes) => scopes.every(scope => granted(token).includes(scope)),
+    hasGrantedAnyScope: (token, ...scopes) => scopes.some(scope => granted(token).includes(scope)),
   };
 }
 
@@ -111,24 +115,18 @@ function stubAccount(eventsByCalendar) {
 }
 
 describe('the consent asked for can actually list the calendars', () => {
-  // calendar.events authorises events.list but NOT calendarList.list, which
-  // takes calendar.readonly, calendar, calendar.calendarlist or
-  // calendar.calendarlist.readonly. Asking for events alone made the whole
-  // multi-calendar read fail for a first-time consent.
-  const LISTING_SCOPES = [
-    'https://www.googleapis.com/auth/calendar.readonly',
-    'https://www.googleapis.com/auth/calendar',
-    'https://www.googleapis.com/auth/calendar.calendarlist',
-    'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-  ];
+  // calendar.events authorises events.list but NOT calendarList.list. The
+  // accepted sets live in the module, so this asserts against the same list
+  // the connector decides with rather than a copy that can drift from it.
 
   it('asks for a scope Google accepts for calendarList.list', () => {
     const asked = connector.requestedScopes().split(' ');
     expect(asked.some(scope => LISTING_SCOPES.includes(scope))).toBe(true);
   });
 
-  it('still asks for the event scope canPush is computed from', () => {
-    expect(connector.requestedScopes().split(' ')).toContain(connector.SCOPE_WRITE);
+  it('still asks for a scope that authorises writing an event', () => {
+    const asked = connector.requestedScopes().split(' ');
+    expect(asked.some(scope => WRITING_SCOPES.includes(scope))).toBe(true);
   });
 });
 
@@ -203,6 +201,25 @@ describe('an account whose grant cannot list calendars', () => {
     connector.applyGrantedScopes({access_token: 'refreshed-without-scope'});
     return connector.getEvents(PERIOD_START, PERIOD_END).then(events => {
       expect(connector.canListCalendars).toBe(true);
+      expect(counts.calendarList).toBe(1);
+      expect(events.map(event => event.id)).toEqual(['a', 'b']);
+    });
+  });
+
+  it('recognises the broader calendar scope as authorising both', () => {
+    const counts = stubAccount({
+      'primary': [googleEvent('a', 1)],
+      'shared@group.calendar.google.com': [googleEvent('b', 2)],
+    });
+    // One grant that Google accepts for calendarList.list and for writing an
+    // event, but which is neither of the two scopes this connector requests.
+    connector.applyGrantedScopes({
+      access_token: 'broad',
+      scope: 'https://www.googleapis.com/auth/calendar',
+    });
+    expect(connector.canListCalendars).toBe(true);
+    expect(connector.canPush).toBe(true);
+    return connector.getEvents(PERIOD_START, PERIOD_END).then(events => {
       expect(counts.calendarList).toBe(1);
       expect(events.map(event => event.id)).toEqual(['a', 'b']);
     });

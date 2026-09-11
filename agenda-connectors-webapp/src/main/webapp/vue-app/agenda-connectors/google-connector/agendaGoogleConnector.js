@@ -28,6 +28,26 @@ import {DEFAULT_CALENDAR_COLOR, mapCalendarListEntry, mapGoogleEvent, mergeEvent
 const PUSH_CALENDAR_ID = 'primary';
 
 /**
+ * Every scope Google accepts for calendarList.list, and every scope it
+ * accepts for writing an event. A grant is checked against the whole set
+ * rather than against the one member this connector happens to request:
+ * an account holding the broader `calendar` scope authorises both, and
+ * reading it as "cannot list" would put it on the fallback while it in fact
+ * holds everything.
+ */
+export const LISTING_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/calendar.calendarlist',
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+];
+
+export const WRITING_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar',
+];
+
+/**
  * The one calendar a calendar.events grant can still read, used when the
  * account's grant does not authorise listing the others.
  *
@@ -139,13 +159,16 @@ export default {
     // account of holding no permissions at all, permanently: canPush would
     // be recoverable through the push flow, canListCalendars would not,
     // because the fallback it selects raises no error that could correct it.
-    // Leaving both untouched keeps whatever the last token that did declare
-    // its scopes established.
+    // Leaving both untouched keeps their current value — which, on a fresh
+    // page, is the declared default rather than a memory of anything. The
+    // server carries the granted scopes forward across a refresh so that a
+    // stored token always declares them; this guard is what keeps a token
+    // that still says nothing from being read as a refusal.
     if (!tokenResponse || !tokenResponse.scope) {
       return;
     }
-    this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-    this.canListCalendars = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_READ);
+    this.canPush = this.cientOauth.hasGrantedAnyScope(tokenResponse, ...WRITING_SCOPES);
+    this.canListCalendars = this.cientOauth.hasGrantedAnyScope(tokenResponse, ...LISTING_SCOPES);
   },
   authorize(refresh) {
     return new Promise((resolve, reject) => {
@@ -242,15 +265,20 @@ export default {
     }
   },
   /**
-   * Forgets that write access was granted.
+   * Forgets what the disconnected account's grant authorised.
    * <p>
-   * canPush is not a property of this connector but of the account attached to
-   * it: it records that the user granted the write scope, and it is recomputed
-   * from hasGrantedAllScopes() every time a token is obtained. Disconnecting
-   * revokes that grant, so keeping the flag would claim a permission that no
-   * longer exists — connect() reads it to decide whether to ask for write
-   * access, and would skip asking, leaving the client without a usable token
-   * until the first copy failed.
+   * Neither flag is a property of this connector; both belong to the account
+   * attached to it, and both are recomputed from the grant every time a token
+   * is obtained. Disconnecting revokes that grant, so keeping either would
+   * claim a permission that no longer exists.
+   * <p>
+   * They are forgotten differently on purpose. canPush goes to false, because
+   * connect() reads it to decide whether to ask for write access and would
+   * otherwise skip asking, leaving the client without a usable token until
+   * the first copy failed. canListCalendars goes back to its optimistic
+   * default, so the next account's grant is read rather than inherited —
+   * false would be worse than stale here, since the fallback it selects
+   * raises no error that anything on a normal page could correct.
    *
    * @returns {void}
    */
