@@ -57,7 +57,10 @@ function stubAccount(eventsByCalendar) {
   connector.canListCalendars = true;
   connector.canPush = false;
   connector.loadingCallback = jest.fn();
-  connector.cientOauth = {hasGrantedAllScopes: () => false};
+  // A normally-granted account: anything else would quietly divert these
+  // tests onto the primary-only fallback, where a fixture whose calendar
+  // happens to be named 'primary' still looks green.
+  connector.cientOauth = {hasGrantedAllScopes: () => true};
   connector.authorize = jest.fn(() => Promise.resolve({access_token: 'renewed'}));
   connector.gapi = {
     client: {
@@ -149,6 +152,17 @@ describe('an account whose grant cannot list calendars', () => {
     expect(connector.canPush).toBe(true);
   });
 
+  it('stops claiming it cannot list once the account is disconnected', () => {
+    stubNarrowGrant({'primary': [googleEvent('a', 1)]});
+    expect(connector.canListCalendars).toBe(false);
+    // agenda calls this on disconnect. The refusal belonged to the grant
+    // being thrown away; leaving it set would make the next account inherit
+    // it, and the fallback raises no error that could ever clear it.
+    connector.resetPushAbility();
+    expect(connector.canListCalendars).toBe(true);
+    expect(connector.canPush).toBe(false);
+  });
+
   it('lists again once the grant includes the read scope', () => {
     const counts = stubAccount({'primary': [googleEvent('a', 1)]});
     connector.cientOauth = {hasGrantedAllScopes: () => true};
@@ -182,8 +196,13 @@ describe('getEvents when one calendar of several fails', () => {
     });
   });
 
-  it('lets a 401 through, so the caller still gets to renew the token', () => {
-    const counts = stubAccount({'primary': [googleEvent('a', 1)]});
+  it('lets a 401 through, and the renewed token reads the whole account', () => {
+    // Two calendars on purpose: a single 'primary' fixture cannot tell a
+    // real re-read from a fall back to the primary calendar alone.
+    const counts = stubAccount({
+      'primary': [googleEvent('a', 1)],
+      'shared@group.calendar.google.com': [googleEvent('b', 2)],
+    });
     const answerNormally = connector.gapi.client.calendar.events.list;
     let firstAttempt = true;
     connector.gapi.client.calendar.events.list = options => {
@@ -199,7 +218,10 @@ describe('getEvents when one calendar of several fails', () => {
       // it reached the ladder, which renewed the token and tried again.
       expect(connector.authorize).toHaveBeenCalled();
       expect(counts.events['primary']).toBe(2);
-      expect(events.map(event => event.id)).toEqual(['a']);
+      // Both calendars come back: the retry re-read the account rather than
+      // silently dropping to primary.
+      expect(events.map(event => event.id)).toEqual(['a', 'b']);
+      expect(connector.canListCalendars).toBe(true);
     });
   });
 

@@ -243,6 +243,15 @@ export default {
    */
   resetPushAbility() {
     this.canPush = false;
+    // canListCalendars is grant-derived in exactly the same way, and the
+    // grant is what disconnecting throws away. It goes back to its
+    // optimistic default rather than to false: the next account's grant is
+    // then read from the token it returns, instead of the next account
+    // inheriting a refusal that belonged to the previous one. Leaving it
+    // false would be worse than stale — the listing path raises no error by
+    // design once it is false, so nothing on a normal page would ever put
+    // it back.
+    this.canListCalendars = true;
   },
   disconnect() {
     this.loadingCallback(this, true);
