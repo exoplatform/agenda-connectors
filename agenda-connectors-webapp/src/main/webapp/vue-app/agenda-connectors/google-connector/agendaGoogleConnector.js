@@ -27,6 +27,23 @@ import {mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCal
  */
 const PUSH_CALENDAR_ID = 'primary';
 
+/**
+ * Attach a value as a non-enumerable property so Vue's reactivity walker
+ * (which iterates Object.keys()) never recurses into it. gapi/Google
+ * Identity Services keep a hidden cross-origin iframe (accounts.google.com)
+ * inside their internal state; letting Vue observe it throws
+ * "SecurityError: Blocked a frame with origin ... from accessing a
+ * cross-origin frame" when it tries to read '__ob__' off that Window.
+ */
+function definePrivateProperty(object, name, value) {
+  Object.defineProperty(object, name, {
+    value,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+}
+
 export default {
   name: 'agenda.googleCalendar',
   description: 'agenda.googleCalendar.description',
@@ -458,7 +475,7 @@ function checkUserStatus(connector) {
 function initGoogleConnector(connector) {
   connector.loadingCallback(connector, true);
   window.require(['https://apis.google.com/js/api.js', 'https://accounts.google.com/gsi/client'], () => {
-    connector.identity = google.accounts.id;
+    definePrivateProperty(connector, 'identity', google.accounts.id);
     connector.identity.initialize({
       client_id: connector.CLIENT_ID,
       select_by: 'user',
@@ -477,14 +494,14 @@ function initGoogleConnector(connector) {
         }
       }
     });
-    connector.gapi = gapi;
+    definePrivateProperty(connector, 'gapi', gapi);
     connector.gapi.load('client', function() {
       gapi.client.init({
         discoveryDocs: connector.DISCOVERY_DOCS,
       }).then(function () {
         checkUserStatus(connector);
-        connector.cientOauth = google.accounts.oauth2;
-        connector.codeClient = connector.cientOauth.initCodeClient({
+        definePrivateProperty(connector, 'cientOauth', google.accounts.oauth2);
+        definePrivateProperty(connector, 'codeClient', connector.cientOauth.initCodeClient({
           client_id: connector.CLIENT_ID,
           scope: connector.SCOPE_WRITE,
           ux_mode: 'popup',
@@ -492,7 +509,7 @@ function initGoogleConnector(connector) {
             connector.loadingCallback(connector, false);
             connector.connectionStatusChangedCallback(connector, false, error);
           }
-        });
+        }));
       }, function(error) {
         connector.loadingCallback(connector, false);
         connector.connectionStatusChangedCallback(connector, false, error);

@@ -192,7 +192,18 @@ function initOfficeConnector(connector) {
   connector.loadingCallback(connector, true);
   window.require(['https://alcdn.msauth.net/browser/2.8.0/js/msal-browser.min.js'], (msal) => {
     const officeApi = new msal.PublicClientApplication(connector.config);
-    connector.officeApi = officeApi;
+    // Non-enumerable: MSAL keeps a hidden cross-origin iframe
+    // (login.microsoftonline.com) in its internal state for silent token
+    // renewal. Letting Vue's reactivity walker (which iterates
+    // Object.keys()) recurse into it throws "SecurityError: Blocked a frame
+    // with origin ... from accessing a cross-origin frame" when it tries to
+    // read '__ob__' off that Window.
+    Object.defineProperty(connector, 'officeApi', {
+      value: officeApi,
+      enumerable: false,
+      configurable: true,
+      writable: true,
+    });
 
     const currentUser = officeApi.getAllAccounts().length > 0 && connector.officeApi.getAllAccounts()[0] || null;
     if (currentUser) {
