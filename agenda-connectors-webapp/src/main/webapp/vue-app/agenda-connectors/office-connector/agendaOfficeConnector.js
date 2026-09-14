@@ -14,6 +14,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+import {defineSdkHandle} from '../js/agendaConnectorUtils.js';
+
 export default {
   name: 'agenda.officeCalendar',
   avatar: '/agenda-connectors/skin/images/office365.png',
@@ -192,7 +194,7 @@ function initOfficeConnector(connector) {
   connector.loadingCallback(connector, true);
   window.require(['https://alcdn.msauth.net/browser/2.8.0/js/msal-browser.min.js'], (msal) => {
     const officeApi = new msal.PublicClientApplication(connector.config);
-    connector.officeApi = officeApi;
+    defineSdkHandle(connector, 'officeApi', officeApi);
 
     const currentUser = officeApi.getAllAccounts().length > 0 && connector.officeApi.getAllAccounts()[0] || null;
     if (currentUser) {
