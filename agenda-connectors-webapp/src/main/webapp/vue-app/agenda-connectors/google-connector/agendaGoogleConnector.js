@@ -16,6 +16,7 @@
  */
 import jwt_decode from 'jwt-decode';
 import {mapCalendarListEntry, mapGoogleEvent, mergeEventLists} from './googleCalendarMapping.js';
+import {defineSdkHandle} from '../js/agendaConnectorUtils.js';
 
 /**
  * The calendar eXo copies of meetings are pushed to. Deliberately not derived
@@ -458,7 +459,7 @@ function checkUserStatus(connector) {
 function initGoogleConnector(connector) {
   connector.loadingCallback(connector, true);
   window.require(['https://apis.google.com/js/api.js', 'https://accounts.google.com/gsi/client'], () => {
-    connector.identity = google.accounts.id;
+    defineSdkHandle(connector, 'identity', google.accounts.id);
     connector.identity.initialize({
       client_id: connector.CLIENT_ID,
       select_by: 'user',
@@ -477,14 +478,14 @@ function initGoogleConnector(connector) {
         }
       }
     });
-    connector.gapi = gapi;
+    defineSdkHandle(connector, 'gapi', gapi);
     connector.gapi.load('client', function() {
       gapi.client.init({
         discoveryDocs: connector.DISCOVERY_DOCS,
       }).then(function () {
         checkUserStatus(connector);
-        connector.cientOauth = google.accounts.oauth2;
-        connector.codeClient = connector.cientOauth.initCodeClient({
+        defineSdkHandle(connector, 'cientOauth', google.accounts.oauth2);
+        defineSdkHandle(connector, 'codeClient', connector.cientOauth.initCodeClient({
           client_id: connector.CLIENT_ID,
           scope: connector.SCOPE_WRITE,
           ux_mode: 'popup',
@@ -492,7 +493,7 @@ function initGoogleConnector(connector) {
             connector.loadingCallback(connector, false);
             connector.connectionStatusChangedCallback(connector, false, error);
           }
-        });
+        }));
       }, function(error) {
         connector.loadingCallback(connector, false);
         connector.connectionStatusChangedCallback(connector, false, error);
