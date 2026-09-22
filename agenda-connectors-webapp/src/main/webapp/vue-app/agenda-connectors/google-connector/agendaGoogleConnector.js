@@ -54,7 +54,13 @@ const EVENTS_PAGE_SIZE = 2500;
  */
 const MAX_EVENT_PAGES = 10;
 
-/** The calendar list last read, the account it was read for, and when. */
+/**
+ * The calendar list read for an account: the in-flight or settled promise,
+ * the account, and when it started. The promise rather than the entries, so
+ * callers that arrive while a read is running share it instead of each
+ * issuing their own — on an agenda page a remote read and the calendars
+ * panel routinely start in the same tick.
+ */
 let calendarListCache = null;
 
 /**
@@ -168,13 +174,31 @@ export default {
         settle(resolve, tokenResponse);
       };
       const refuse = error => settle(reject, error);
-      // The one route that cannot settle itself: the SDK's failing callback is
-      // installed at init and knows nothing of this promise.
+      /**
+       * Opens the consent popup for this call, and only this call.
+       * <p>
+       * The code client holds ONE callback, read at response time rather than
+       * captured by requestCode(), so whoever assigned it last receives the
+       * consent. Assigning it on every authorize() — as this did — meant a
+       * background read renewing a token while the popup was open took
+       * delivery of the user's consent: the token was installed, but on a
+       * promise that had already settled, so connect() never settled, the
+       * account was never recorded, and nothing reported it. A granted consent
+       * fires no error_callback, so there was no second way out.
+       * <p>
+       * A second popup is refused rather than opened. The SDK re-randomises
+       * the request id per requestCode() and overwrites the window handle, so
+       * a second one silently strands the first whatever we do with the
+       * callback — it would receive neither the consent nor a popup_closed.
+       *
+       * @returns {void}
+       */
       const askConsent = () => {
+        if (this.pendingAuthorization) {
+          refuse(new Error('A Google consent popup is already open'));
+          return;
+        }
         this.pendingAuthorization = slot;
-        this.codeClient.requestCode();
-      };
-      try {
         this.codeClient.callback = (response) => {
           if (!response?.code) {
             settle(reject, new Error('Google consent was not granted'));
@@ -184,6 +208,9 @@ export default {
             .then(accept)
             .catch(refuse);
         };
+        this.codeClient.requestCode();
+      };
+      try {
         if (refresh) {
           // The last token obtainable without the user. The rejection is
           // replaced, not dropped: agenda needs the reconnect code, and the
@@ -297,8 +324,9 @@ export default {
   /**
    * The account's events over a period.
    *
-   * @param {Date} periodStartDate start of the period to read
-   * @param {Date} periodEndDate end of the period to read
+   * @param {String} periodStartDate an RFC3339 timestamp with time-zone
+   *        offset, as $agendaUtils.toRFC3339(date, false, true) produces
+   * @param {String} periodEndDate the same, for the end of the period
    * @returns {Promise} resolves with the events, rejects when the account
    *          could not be read
    */
@@ -320,8 +348,9 @@ export default {
    * expanded recurrences. Breadth is unchanged — one read per calendar, run
    * concurrently — only the depth of each stops depending on a guess.
    * <p>
-   * Four things it does not promise: the bound is on events, so a view
-   * truncating by something else (day slots) is given enough, not an exact
+   * Four things it does not promise: the bound is on events, while a view
+   * truncates by its own rule — agenda's timeline at `limit` entries, a
+   * multi-day event taking one per day — so this gives enough, not an exact
    * answer; equal start times have no tie-break; the count is a floor per
    * calendar, not a ceiling, since a short page followed by a full one
    * overshoots; and a calendar that cannot produce the count within
@@ -331,7 +360,8 @@ export default {
    * bound, and this is an SPI other addons call, so it is refused here rather
    * than left to a caller's arithmetic.
    *
-   * @param {Date} periodStartDate the date to read forward from
+   * @param {String} periodStartDate an RFC3339 timestamp with time-zone
+   *        offset, as $agendaUtils.toRFC3339(date, false, true) produces
    * @param {Number} count how many events the caller can show, at least 1
    * @returns {Promise} resolves with enough events to fill a list of count
    *          per calendar, merged; rejects on a missing or non-positive
@@ -538,8 +568,9 @@ function fetchCalendarListPage(connector, pageToken, accumulated) {
 }
 
 /**
- * The account's calendar list, read at most once per TTL. Every event read
- * needs it now, on top of listCalendars() asking for it separately.
+ * The account's calendar list, read at most once per TTL, concurrent callers
+ * included. Every event read needs it now, on top of listCalendars() asking
+ * for it separately.
  * <p>
  * Module scope, not the connector: the connector lives in agenda's reactive
  * data and nothing here needs Vue to watch it (as for the SDK handles of
@@ -563,14 +594,21 @@ function retrieveCalendarList(connector, force) {
     && calendarListCache.user === connector.user
     && (Date.now() - calendarListCache.at) < CALENDAR_LIST_TTL_MS;
   if (!force && usable) {
-    return Promise.resolve(calendarListCache.entries);
+    return calendarListCache.promise;
   }
-  return fetchCalendarListPage(connector).then(entries => {
-    if (identified) {
-      calendarListCache = {at: Date.now(), entries, user: connector.user};
-    }
-    return entries;
-  });
+  const promise = fetchCalendarListPage(connector);
+  if (identified) {
+    // Stored before it settles, so a caller arriving mid-read waits on this
+    // one. Cleared on failure, or every later caller would inherit it.
+    const entry = {at: Date.now(), promise, user: connector.user};
+    calendarListCache = entry;
+    promise.catch(() => {
+      if (calendarListCache === entry) {
+        calendarListCache = null;
+      }
+    });
+  }
+  return promise;
 }
 
 /**
@@ -633,9 +671,13 @@ function retrieveCalendarEvents(connector, calendar, request, pageToken, accumul
       // Once, on the page that reaches the threshold: a windowed read carries
       // on past it and one line is the signal, not a page each.
       if (result.nextPageToken && !satisfied && page === MAX_EVENT_PAGES) {
-        console.error(exhausted
-          ? `stopped reading Google calendar ${calendar.id} after ${MAX_EVENT_PAGES} pages holding ${events.length} of the ${request.wanted} events asked for`
-          : `still reading Google calendar ${calendar.id} after ${page} pages holding ${events.length} events of the requested period`);
+        if (exhausted) {
+          console.error(`stopped reading Google calendar ${calendar.id} after ${MAX_EVENT_PAGES} pages holding ${events.length} of the ${request.wanted} events asked for`);
+        } else {
+          // Long, not wrong: this read carries on to exhaustion and its answer
+          // is complete, so it is not an incident.
+          console.warn(`still reading Google calendar ${calendar.id} after ${page} pages holding ${events.length} events of the requested period`);
+        }
       }
       return result.nextPageToken && !satisfied && !exhausted
         ? retrieveCalendarEvents(connector, calendar, request, result.nextPageToken, events, page + 1)
