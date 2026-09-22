@@ -60,6 +60,11 @@ const MAX_EVENT_PAGES = 10;
  * callers that arrive while a read is running share it instead of each
  * issuing their own — on an agenda page a remote read and the calendars
  * panel routinely start in the same tick.
+ * <p>
+ * `at` is when the read <em>started</em>, not when it answered: an entry has
+ * to be visible before it settles or there is nothing for a concurrent caller
+ * to share, so the TTL runs from the start of the read and a slow one spends
+ * part of its own TTL.
  */
 let calendarListCache = null;
 
