@@ -157,7 +157,7 @@ export default {
         settler(value);
       };
       const accept = tokenResponse => {
-        if (!tokenResponse || !tokenResponse.access_token) {
+        if (!tokenResponse?.access_token) {
           settle(reject, credentialsError('Google answered no access token'));
           return;
         }
@@ -176,7 +176,7 @@ export default {
       };
       try {
         this.codeClient.callback = (response) => {
-          if (!response || !response.code) {
+          if (!response?.code) {
             settle(reject, new Error('Google consent was not granted'));
             return;
           }
@@ -427,7 +427,7 @@ export default {
  *          account could not be read
  */
 function readEvents(connector, request) {
-  if (!connector.gapi || !connector.gapi.client || !connector.gapi.client.calendar) {
+  if (!connector.gapi?.client?.calendar) {
     return Promise.resolve(null);
   }
   connector.loadingCallback(connector, true);
@@ -484,8 +484,8 @@ function failPendingAuthorization(connector, error) {
  * @returns {Error} the rejection, marked as a dismissal only when it is one
  */
 function consentFailure(error) {
-  const type = error && error.type || 'unknown';
-  const failure = new Error(error && error.message || `Google consent failed: ${type}`);
+  const type = error?.type || 'unknown';
+  const failure = new Error(error?.message || `Google consent failed: ${type}`);
   failure.type = type;
   failure.cause = error;
   if (type === CONSENT_DISMISSED_TYPE) {
@@ -605,7 +605,7 @@ function forgetCalendarList() {
  * @param {Number} page which page this is, counted from 1, for the cap
  * @returns {Promise} a promise with that calendar's mapped events
  */
-function retrieveCalendarEvents(connector, calendar, request, pageToken, accumulated, page) {
+function retrieveCalendarEvents(connector, calendar, request, pageToken, accumulated, page = 1) {
   const options = {
     'calendarId': calendar.id,
     'timeMin': request.timeMin,
@@ -621,7 +621,6 @@ function retrieveCalendarEvents(connector, calendar, request, pageToken, accumul
   if (pageToken) {
     options.pageToken = pageToken;
   }
-  const pageNumber = page || 1;
   return connector.gapi.client.calendar.events.list(options)
     .then(response => {
       const result = response.result || {};
@@ -630,16 +629,16 @@ function retrieveCalendarEvents(connector, calendar, request, pageToken, accumul
       // Only a count-bounded read is capped: truncating a windowed one would
       // drop events inside the period asked for. A long windowed read still
       // says so, or it is invisible but for a slow tab.
-      const exhausted = request.wanted && pageNumber >= MAX_EVENT_PAGES;
+      const exhausted = request.wanted && page >= MAX_EVENT_PAGES;
       // Once, on the page that reaches the threshold: a windowed read carries
       // on past it and one line is the signal, not a page each.
-      if (result.nextPageToken && !satisfied && pageNumber === MAX_EVENT_PAGES) {
+      if (result.nextPageToken && !satisfied && page === MAX_EVENT_PAGES) {
         console.error(exhausted
           ? `stopped reading Google calendar ${calendar.id} after ${MAX_EVENT_PAGES} pages holding ${events.length} of the ${request.wanted} events asked for`
-          : `still reading Google calendar ${calendar.id} after ${pageNumber} pages holding ${events.length} events of the requested period`);
+          : `still reading Google calendar ${calendar.id} after ${page} pages holding ${events.length} events of the requested period`);
       }
       return result.nextPageToken && !satisfied && !exhausted
-        ? retrieveCalendarEvents(connector, calendar, request, result.nextPageToken, events, pageNumber + 1)
+        ? retrieveCalendarEvents(connector, calendar, request, result.nextPageToken, events, page + 1)
         : events;
     });
 }
