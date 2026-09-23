@@ -28,6 +28,82 @@ import {defineSdkHandle} from '../js/agendaConnectorUtils.js';
  */
 const PUSH_CALENDAR_ID = 'primary';
 
+/**
+ * How long the account's calendar list is reused: long enough for the reads
+ * of one page to share an answer, short enough that a newly subscribed
+ * calendar appears without a reload.
+ */
+const CALENDAR_LIST_TTL_MS = 300000;
+
+/**
+ * Page size for a whole-period read. Google's documented ceiling; the answer
+ * is complete because the token is followed, not because this is large.
+ */
+const EVENTS_PAGE_SIZE = 2500;
+
+/**
+ * Page bound for a count-bounded read. A windowed read ends at its timeMax;
+ * a count-bounded one has no window, and Google documents that a page "may
+ * be less than this value, or none at all, even if there are more events
+ * matching the query" — so empty-but-tokened pages would be followed without
+ * limit.
+ * <p>
+ * Also the count past which a windowed read, which is never truncated, says
+ * once that it is running long. Two uses, one bound: raising this moves the
+ * warning with the cap.
+ */
+const MAX_EVENT_PAGES = 10;
+
+/**
+ * The calendar list read for an account: the in-flight or settled promise,
+ * the account, and when it started. The promise rather than the entries, so
+ * callers that arrive while a read is running share it instead of each
+ * issuing their own — on an agenda page a remote read and the calendars
+ * panel routinely start in the same tick.
+ * <p>
+ * `at` is when the read <em>started</em>, not when it answered: an entry has
+ * to be visible before it settles or there is nothing for a concurrent caller
+ * to share, so the TTL runs from the start of the read and a slow one spends
+ * part of its own TTL.
+ */
+let calendarListCache = null;
+
+/**
+ * Marks a rejection as "this account must be connected again". Agenda reads
+ * it off `credentialsErrorCode` and tells the user to reconnect rather than
+ * reporting a copy that failed (AgendaConnector.copyFailureMessageKey).
+ */
+const CREDENTIALS_ERROR_CODE = 'google_credentials_refused';
+
+/**
+ * The one Identity Services error type meaning the user backed out. Its
+ * siblings — popup_failed_to_open, unknown, and the undocumented
+ * missing_required_parameter the bundle also exports — are real failures.
+ */
+const CONSENT_DISMISSED_TYPE = 'popup_closed';
+
+/**
+ * What agenda tests to stay quiet about a dismissed consent. A gapi.auth2
+ * code, kept because agenda's test is written on it; see consentFailure().
+ */
+const CONSENT_DISMISSED_LEGACY_CODE = 'popup_closed_by_user';
+
+/**
+ * A rejection agenda will read as "reconnect this account".
+ *
+ * @param {String} message what went wrong, for whoever reads the rejection
+ * @param {Object} cause the failure this one replaces, when there was one
+ * @returns {Error} the error to reject with
+ */
+function credentialsError(message, cause) {
+  const error = new Error(message);
+  error.code = CREDENTIALS_ERROR_CODE;
+  if (cause) {
+    error.cause = cause;
+  }
+  return error;
+}
+
 export default {
   name: 'agenda.googleCalendar',
   description: 'agenda.googleCalendar.description',
@@ -40,6 +116,7 @@ export default {
   canConnect: true,
   canPush: false,
   canListCalendars: true,
+  credentialsErrorCode: CREDENTIALS_ERROR_CODE,
   initialized: false,
   isSignedIn: false,
   pushing: false,
@@ -59,61 +136,172 @@ export default {
 
     initGoogleConnector(this);
   },
-  authorize(refresh) {
+  /**
+   * A usable token for the connected account.
+   * <p>
+   * <b>interactive</b> — only connect() passes it — may open the consent
+   * popup. <b>background</b>, the default, must never open one over a page
+   * the user was merely visiting: it rejects instead, and the caller reports
+   * an account it could not read.
+   * <p>
+   * Every path settles. Four did not, and the shape recurs: a promise settled
+   * from an SDK callback needs every branch to reach resolve or reject, the
+   * callbacks installed elsewhere included (EXO-90496).
+   *
+   * @param {Boolean} refresh whether to spend the stored refresh token
+   *        instead of reading the access token already held
+   * @param {Boolean} interactive whether the user may be prompted
+   * @returns {Promise} resolves with a token response carrying an
+   *          access_token, rejects when none could be obtained
+   */
+  authorize(refresh, interactive) {
     return new Promise((resolve, reject) => {
-      try {
-        this.codeClient.callback = (response) => {
-          if (response && response.code) {
+      // This call's identity in the connector's single pending slot. Several
+      // authorize() calls overlap routinely, so settling clears the slot only
+      // when it is still ours: clearing unconditionally let a background call
+      // disarm the popup's rejector, leaving connect() pending.
+      const slot = {reject};
+      const settle = (settler, value) => {
+        if (this.pendingAuthorization === slot) {
+          this.pendingAuthorization = null;
+        }
+        settler(value);
+      };
+      const accept = tokenResponse => {
+        if (!tokenResponse?.access_token) {
+          settle(reject, credentialsError('Google answered no access token'));
+          return;
+        }
+        this.gapi.client.setToken(tokenResponse);
+        if (this.cientOauth) {
+          this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+        }
+        settle(resolve, tokenResponse);
+      };
+      const refuse = error => settle(reject, error);
+      /**
+       * Opens the consent popup for this call, and only this call.
+       * <p>
+       * The code client holds ONE callback, read at response time rather than
+       * captured by requestCode(), so whoever assigned it last receives the
+       * consent. Assigning it on every authorize() — as this did — meant a
+       * background read renewing a token while the popup was open took
+       * delivery of the user's consent: the token was installed, but on a
+       * promise that had already settled, so connect() never settled, the
+       * account was never recorded, and nothing reported it. A granted consent
+       * fires no error_callback, so there was no second way out.
+       * <p>
+       * A second popup is refused rather than opened. The SDK re-randomises
+       * the request id per requestCode() and overwrites the window handle, so
+       * a second one silently strands the first whatever we do with the
+       * callback — it would receive neither the consent nor a popup_closed.
+       * <p>
+       * It guards itself: it is also reached from a stored-token rejection,
+       * a later microtask the executor's try no longer covers, so a throw
+       * there settled nothing and kept the slot taken for good.
+       *
+       * @returns {void}
+       */
+      const askConsent = () => {
+        if (this.pendingAuthorization) {
+          refuse(new Error('A Google consent popup is already open'));
+          return;
+        }
+        if (!this.codeClient) {
+          refuse(new Error('The Google SDK is not ready yet'));
+          return;
+        }
+        try {
+          this.pendingAuthorization = slot;
+          this.codeClient.callback = (response) => {
+            if (!response?.code) {
+              settle(reject, new Error('Google consent was not granted'));
+              return;
+            }
             return requestToken(response.code, response.scope, window.location.origin)
-              .then(tokenResponse => {
-                if (tokenResponse && tokenResponse.access_token) {
-                  this.gapi.client.setToken(tokenResponse);
-                  resolve(tokenResponse);
-                }
-              });
-          }
-        };
-        if (refresh) {
-          return refreshToken().then(refreshTokenResponse => {
-            if (refreshTokenResponse && refreshTokenResponse.access_token) {
-              this.gapi.client.setToken(refreshTokenResponse);
-              this.canPush = this.cientOauth.hasGrantedAllScopes(refreshTokenResponse, this.SCOPE_WRITE);
-              resolve(refreshTokenResponse);
-            }
-          });
-        } else if (this.user) {
-          return getStoredToken().then(tokenResponse => {
-            if (tokenResponse && tokenResponse.access_token) {
-              this.gapi.client.setToken(tokenResponse);
-              this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-              this.gapi.client.setToken(tokenResponse);
-              resolve(tokenResponse);
-            }
-          }).catch((error) => {
-            if (error.status === 404) {
-              this.codeClient.requestCode();
-            }
-          });
-        } else {
+              .then(accept)
+              .catch(refuse);
+          };
           this.codeClient.requestCode();
+        } catch (err) {
+          // Still ours, so settling releases the slot too.
+          refuse(err);
+        }
+      };
+      try {
+        if (refresh) {
+          // The last token obtainable without the user. The rejection is
+          // replaced, not dropped: agenda needs the reconnect code, and the
+          // endpoint's own failure travels on as the cause. An expired token
+          // is a normal flow, so it is not logged.
+          return refreshToken().then(accept)
+            .catch(error => refuse(credentialsError('Google refused to refresh the access token', error)));
+        } else if (this.user) {
+          return getStoredToken().then(accept).catch(error => {
+            // Only a fresh consent can produce one, and only the user gives it.
+            if (error.status === 404) {
+              if (interactive) {
+                askConsent();
+              } else {
+                refuse(credentialsError('No Google token stored for this account', error));
+              }
+            } else {
+              refuse(error);
+            }
+          });
+        } else if (interactive) {
+          askConsent();
+        } else {
+          refuse(new Error('No connected Google account to authorize'));
         }
       } catch (err) {
-        reject(err);
+        refuse(err);
       }
     });
   },
+  /**
+   * Signs the user in with Google's sign-in prompt.
+   * <p>
+   * Settles on the moment <em>type</em>, never on one reason string: the
+   * prompt reports a display moment, then exactly one of skipped or
+   * dismissed, and a reason only belongs to its own type —
+   * getDismissedReason() is undefined on a skip, and user_cancel is a skip.
+   * Testing reasons alone left a closed prompt settling nothing, so connect()
+   * never settled (EXO-90496).
+   * <p>
+   * Only a displayed prompt is not final: the user is still choosing.
+   *
+   * @returns {Promise} resolves once Google returned a credential, rejects
+   *          otherwise — marked as a dismissal when the user backed out, so
+   *          closing the prompt is not reported as a failure
+   */
   authenticate() {
     return new Promise((resolve, reject) => {
       deleteCookie('g_state');
+      const fail = (error, reason) => {
+        this.loadingCallback(this, false);
+        this.connectionStatusChangedCallback(this, false, reason);
+        reject(error);
+      };
       try {
         this.identity.prompt(notification => {
-          if (notification.getDismissedReason() === 'credential_returned') {
-            resolve();
-          } else
-          if (notification.getDismissedReason() === 'user_cancel') {
-            this.loadingCallback(this, false);
-            this.connectionStatusChangedCallback(this, false, 'user_cancel');
-            resolve();
+          if (notification.isDismissedMoment()) {
+            const reason = notification.getDismissedReason();
+            if (reason === 'credential_returned') {
+              resolve();
+            } else {
+              fail(new Error(`Google sign-in was dismissed: ${reason}`), reason);
+            }
+          } else if (notification.isSkippedMoment()) {
+            const reason = notification.getSkippedReason();
+            if (reason === 'issuing_failed') {
+              fail(new Error('Google could not issue a credential'), reason);
+            } else {
+              fail(signInDismissed(reason), reason);
+            }
+          } else if (notification.isNotDisplayed()) {
+            const reason = notification.getNotDisplayedReason();
+            fail(new Error(`Google sign-in could not be displayed: ${reason}`), reason);
           }
         });
       } catch (err) {
@@ -124,20 +312,19 @@ export default {
   connect(askWriteAccess) {
     this.loadingCallback(this, true);
     if (askWriteAccess && !this.canPush) {
-      return this.authorize().then(tokenResponse => {
-        if (tokenResponse && tokenResponse.access_token) {
-          this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-          return this.authenticate().then(() => {
-            return new Promise((resolve, reject) => {
-              if (this.credential) {
-                const userEmail = this.credential.email;
-                resolve(userEmail);
-              } else {
-                reject();
-              }
-            });
+      // The one call allowed to open the consent popup.
+      return this.authorize(false, true).then(() => {
+        return this.authenticate().then(() => {
+          return new Promise((resolve, reject) => {
+            if (this.credential) {
+              const userEmail = this.credential.email;
+              resolve(userEmail);
+            } else {
+              // Never a bare reject(): agenda's catch reads error.error.
+              reject(new Error('Google signed in without returning an account'));
+            }
           });
-        }
+        });
       });
     } else {
       return this.authenticate().then(() => {
@@ -145,7 +332,7 @@ export default {
           if (this.credential) {
             resolve(this.credential.email);
           } else {
-            reject();
+            reject(new Error('Google signed in without returning an account'));
           }
         });
       });
@@ -169,6 +356,8 @@ export default {
   },
   disconnect() {
     this.loadingCallback(this, true);
+    // Keeping them would serve this account's calendars to the next one.
+    forgetCalendarList();
     return removeToken().then(() => {
       if (this.gapi.client.getToken() && this.cientOauth || this.user) {
         this.cientOauth.revoke(this.gapi.client.getToken());
@@ -181,41 +370,59 @@ export default {
     });
 
   },
+  /**
+   * The account's events over a period.
+   *
+   * @param {String} periodStartDate an RFC3339 timestamp with time-zone
+   *        offset, as $agendaUtils.toRFC3339(date, false, true) produces
+   * @param {String} periodEndDate the same, for the end of the period
+   * @returns {Promise} resolves with the events, rejects when the account
+   *          could not be read; resolves with null, not a list, while the
+   *          Calendar API is not loaded yet — nothing was read
+   */
   getEvents(periodStartDate, periodEndDate) {
-    if (this.gapi && this.gapi.client && this.gapi.client.calendar) {
-      this.loadingCallback(this, true);
-      return new Promise((resolve, reject) => {
-        retrieveEvents(this, periodStartDate, periodEndDate)
-          .then(gEvents => resolve(gEvents))
-          .catch(e => {
-            if (e.status === 403 || e.status === 401) {
-              return this.authorize().then((tokenResponse) => {
-                if (tokenResponse && tokenResponse.access_token) {
-                  this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-                  retrieveEvents(this, periodStartDate, periodEndDate)
-                    .then(gEvents => resolve(gEvents))
-                    .catch((e) => {
-                      if (e.status === 403 || e.status === 401) {
-                        return this.authorize(true).then(() => {
-                          retrieveEvents(this, periodStartDate, periodEndDate)
-                            .then(gEvents => resolve(gEvents));
-                        });
-                      } else {
-                        this.loadingCallback(this, false);
-                        reject(e);
-                      }
-                    });
-                }
-              });
-            } else {
-              this.loadingCallback(this, false);
-              reject(e);
-            }
-          });
-      }).finally(() => this.loadingCallback(this, false));
-    } else {
-      return Promise.resolve(null);
+    return readEvents(this, {timeMin: periodStartDate, timeMax: periodEndDate});
+  },
+  /**
+   * The account's next <code>count</code> events from a date, with no end
+   * date at all.
+   * <p>
+   * The optional half of the connector contract a view uses when it shows "the
+   * next few meetings" rather than a period: it has no period to give, and
+   * inventing one is what made it expensive. Reading every calendar of the
+   * account means a horizon is paid once per calendar, so a year of it — the
+   * only window the timeline widget ever asked for — expanded a year of every
+   * recurrence of every calendar to fill a list of ten items (EXO-90496).
+   * Bounding by the count asks Google for what the view wants: a bounded
+   * number of short pages per calendar, where a horizon cost a year of
+   * expanded recurrences. Breadth is unchanged — one read per calendar, run
+   * concurrently — only the depth of each stops depending on a guess.
+   * <p>
+   * Four things it does not promise: the bound is on events, while a view
+   * truncates by its own rule — agenda's timeline at `limit` entries, a
+   * multi-day event taking one per day — so this gives enough, not an exact
+   * answer; equal start times have no tie-break; the count is a floor per
+   * calendar, not a ceiling, since a short page followed by a full one
+   * overshoots; and a calendar that cannot produce the count within
+   * MAX_EVENT_PAGES is answered short, with an error logged.
+   * <p>
+   * The count is required and positive: with no end date it is the only
+   * bound, and this is an SPI other addons call, so it is refused here rather
+   * than left to a caller's arithmetic.
+   *
+   * @param {String} periodStartDate an RFC3339 timestamp with time-zone
+   *        offset, as $agendaUtils.toRFC3339(date, false, true) produces
+   * @param {Number} count how many events the caller can show, at least 1
+   * @returns {Promise} resolves with enough events to fill a list of count
+   *          per calendar, merged; rejects on a missing or non-positive
+   *          count, or when the account could not be read; resolves with
+   *          null, not a list, while the Calendar API is not loaded yet
+   */
+  getUpcomingEvents(periodStartDate, count) {
+    if (!(count > 0)) {
+      return Promise.reject(new Error('getUpcomingEvents needs a positive count: it is the only bound on a read that has no end date'));
     }
+    return readEvents(this, {timeMin: periodStartDate, wanted: count});
   },
   /**
    * The calendars of the connected Google account, in the shape agenda
@@ -228,9 +435,10 @@ export default {
    * the same id the fetched events are tagged with, which is what makes the
    * left panel's per-calendar checkboxes actually filter the grid.
    *
-   * An expired token is renewed once, the same way getEvents does it; any
-   * other failure is the caller's to handle — agenda logs and drops the one
-   * connector rather than emptying its whole section.
+   * A refused token is renewed the same way getEvents does it — the stored
+   * token, then a refreshed one; any other failure is the caller's to
+   * handle — agenda logs and drops the one connector rather than emptying
+   * its whole section.
    *
    * @returns {Promise} resolves with one {id, name, color, readOnly} per
    *          calendar, or an empty list when the API is not ready
@@ -239,17 +447,19 @@ export default {
     if (!this.gapi || !this.gapi.client || !this.gapi.client.calendar) {
       return Promise.resolve([]);
     }
+    const reread = () => retrieveCalendarList(this, true);
     return retrieveCalendarList(this)
       .catch(error => {
-        if (error.status === 403 || error.status === 401) {
-          return this.authorize().then(tokenResponse => {
-            if (tokenResponse && tokenResponse.access_token) {
-              this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
-            }
-            return retrieveCalendarList(this);
-          });
+        if (!isAuthenticationFailure(error)) {
+          throw error;
         }
-        throw error;
+        return this.authorize().then(reread);
+      })
+      .catch(error => {
+        if (!isAuthenticationFailure(error)) {
+          throw error;
+        }
+        return this.authorize(true).then(reread);
       })
       .then(entries => entries.map(mapCalendarListEntry));
   },
@@ -259,43 +469,147 @@ export default {
   pushEvent(event, connectorRecurringEventId) {
     return this.saveEvent(event, connectorRecurringEventId, false);
   },
+  /**
+   * Writes one meeting to the account, or removes it. Same three attempts and
+   * the same flat shape as the reads: the nested form left this pending, and
+   * a push that never settles leaves the pushing flag raised (EXO-90496).
+   *
+   * @param {Object} event the agenda event to write
+   * @param {String} connectorRecurringEventId parent recurrent event id
+   * @param {Boolean} deleteEvent whether to delete rather than save
+   * @returns {Promise} resolves with the written Google event
+   */
   saveEvent(event, connectorRecurringEventId, deleteEvent) {
-    if (this.gapi) {
-      this.pushing = true;
-      return new Promise((resolve, reject) => {
-        pushEventToGoogle(this, event, connectorRecurringEventId, deleteEvent)
-          .then(gEvent => {
-            resolve(gEvent);
-          }).catch(error => {
-            if (error.status === 403 || error.status === 401) {
-              return this.authorize().then(() => {
-                pushEventToGoogle(this, event, connectorRecurringEventId, deleteEvent)
-                  .then(gEvent => {
-                    resolve(gEvent);
-                  }).catch(error => {
-                    if (error.status === 403 || error.status === 401) {
-                      return this.authorize(true).then(() => {
-                        pushEventToGoogle(this, event, connectorRecurringEventId, deleteEvent)
-                          .then(gEvent => {
-                            resolve(gEvent);
-                          });
-                      });
-                    } else {
-                      this.loadingCallback(this, false);
-                      reject(error);
-                    }
-                  });
-              });
-            } else {
-              this.loadingCallback(this, false);
-              reject(error);
-            }
-          });
-      }).finally(() => this.pushing = false);
+    if (!this.gapi) {
+      return Promise.reject(new Error('Not connected'));
     }
-    return Promise.reject(new Error('Not connected'));
+    this.pushing = true;
+    const push = () => pushEventToGoogle(this, event, connectorRecurringEventId, deleteEvent);
+    return push()
+      .catch(error => {
+        if (!isAuthenticationFailure(error)) {
+          throw error;
+        }
+        return this.authorize().then(push);
+      })
+      .catch(error => {
+        if (!isAuthenticationFailure(error)) {
+          throw error;
+        }
+        return this.authorize(true).then(push);
+      })
+      .finally(() => this.pushing = false);
   },
 };
+
+/**
+ * Reads the account's events, renewing the token if that is what was refused.
+ * <p>
+ * Three attempts: the token in hand, the stored one, then a refreshed one —
+ * an expired access token is the ordinary case an hour after the last page.
+ * Flat rather than nested so that every branch visibly ends in a returned
+ * promise or a throw; the nested form left it pending (EXO-90496).
+ *
+ * @param {Object} connector Google Connector SPI
+ * @param {Object} request what to read — {timeMin, timeMax, wanted}
+ * @returns {Promise} resolves with the mapped events, rejects when the
+ *          account could not be read; resolves with null while the
+ *          Calendar API is not loaded yet
+ */
+function readEvents(connector, request) {
+  if (!connector.gapi?.client?.calendar) {
+    return Promise.resolve(null);
+  }
+  connector.loadingCallback(connector, true);
+  const read = () => retrieveEvents(connector, request);
+  return read()
+    .catch(error => {
+      if (!isAuthenticationFailure(error)) {
+        throw error;
+      }
+      return connector.authorize().then(read);
+    })
+    .catch(error => {
+      if (!isAuthenticationFailure(error)) {
+        throw error;
+      }
+      return connector.authorize(true).then(read);
+    })
+    .finally(() => connector.loadingCallback(connector, false));
+}
+
+/**
+ * Rejects the authorization waiting on the consent popup, if one is. The SDK
+ * reports popup failures through a callback installed once at init, which
+ * knows nothing of any one call's promise; the slot connects the two. Only
+ * one popup can be open at a time, so one slot is enough.
+ *
+ * @param {Object} connector Google Connector SPI
+ * @param {Object} error what the SDK reported
+ * @returns {void}
+ */
+function failPendingAuthorization(connector, error) {
+  const pending = connector.pendingAuthorization;
+  if (pending) {
+    connector.pendingAuthorization = null;
+    pending.reject(consentFailure(error));
+  }
+}
+
+/**
+ * The consent popup's failure, in the shape agenda reads.
+ * <p>
+ * Identity Services errors carry message/stack/type and no <code>error</code>
+ * field, while agenda tests <code>error.error</code> against
+ * 'popup_closed_by_user' — gapi.auth2 vocabulary this connector replaced. So
+ * that test has matched nothing since the move; unnoticed while the popup's
+ * failure never settled, and every dismissal would now read as a failure.
+ * <p>
+ * Translated here, and only popup_closed is marked: popup_failed_to_open,
+ * unknown and the undocumented missing_required_parameter are real failures.
+ * Widening agenda's test would have silenced them, and agenda has no business
+ * knowing one provider's error words.
+ *
+ * @param {Object} error what Identity Services reported
+ * @returns {Error} the rejection, marked as a dismissal only when it is one
+ */
+function consentFailure(error) {
+  const type = error?.type || 'unknown';
+  const failure = new Error(error?.message || `Google consent failed: ${type}`);
+  failure.type = type;
+  failure.cause = error;
+  if (type === CONSENT_DISMISSED_TYPE) {
+    failure.error = CONSENT_DISMISSED_LEGACY_CODE;
+  }
+  return failure;
+}
+
+/**
+ * The sign-in prompt closed without a credential, marked the way agenda
+ * stays quiet about (see consentFailure()). Any skip but issuing_failed is
+ * the user leaving: with FedCM a closed dialog is a skip whose reason says
+ * nothing, since the browser hides why on purpose.
+ *
+ * @param {String} reason the skip reason Identity Services gave
+ * @returns {Error} the rejection, marked as a dismissal
+ */
+function signInDismissed(reason) {
+  const failure = new Error(`Google sign-in was closed: ${reason}`);
+  failure.error = CONSENT_DISMISSED_LEGACY_CODE;
+  return failure;
+}
+
+/**
+ * Whether a failure is Google refusing the token rather than refusing the
+ * request: the only kind a new token can fix, and so the only one worth
+ * spending an authorization round on.
+ *
+ * @param {Object} error the rejection to classify
+ * @returns {Boolean} true when the token is what was refused
+ */
+function isAuthenticationFailure(error) {
+  return !!error && (error.status === 401 || error.status === 403);
+}
 
 /**
  * The raw calendarList entries of the connected account, every page of them:
@@ -313,7 +627,7 @@ export default {
  *          accumulated entries of the pages already fetched
  * @returns {Promise} a promise with the account's calendarList entries
  */
-function retrieveCalendarList(connector, pageToken, accumulated) {
+function fetchCalendarListPage(connector, pageToken, accumulated) {
   const options = {};
   if (pageToken) {
     options.pageToken = pageToken;
@@ -323,8 +637,126 @@ function retrieveCalendarList(connector, pageToken, accumulated) {
       const result = response.result || {};
       const entries = (accumulated || []).concat(result.items || []);
       return result.nextPageToken
-        ? retrieveCalendarList(connector, result.nextPageToken, entries)
+        ? fetchCalendarListPage(connector, result.nextPageToken, entries)
         : entries;
+    });
+}
+
+/**
+ * The account's calendar list, read at most once per TTL, concurrent callers
+ * included. Every event read needs it now, on top of listCalendars() asking
+ * for it separately.
+ * <p>
+ * Module scope, not the connector: the connector lives in agenda's reactive
+ * data and nothing here needs Vue to watch it (as for the SDK handles of
+ * EXO-90245). Keyed by account, because disconnect() alone is not enough —
+ * agenda only calls it when the browser session is signed in, so one
+ * account's calendar ids could be asked for on another's token, every call
+ * 404ing into the per-calendar catch and the grid showing nothing.
+ *
+ * @param {Object} connector Google Connector SPI
+ * @param {Boolean} force whether to ignore whatever is cached, used after a
+ *        token was renewed
+ * @returns {Promise} a promise with the account's calendarList entries
+ */
+function retrieveCalendarList(connector, force) {
+  // AgendaConnector sets user to '' when there is no account or it carries no
+  // remoteUserId, and two such connectors would compare equal. Nothing is
+  // served or stored without an id.
+  const identified = !!connector.user;
+  const usable = identified
+    && calendarListCache
+    && calendarListCache.user === connector.user
+    && (Date.now() - calendarListCache.at) < CALENDAR_LIST_TTL_MS;
+  if (!force && usable) {
+    return calendarListCache.promise;
+  }
+  const promise = fetchCalendarListPage(connector);
+  if (identified) {
+    // Stored before it settles, so a caller arriving mid-read waits on this
+    // one. Cleared on failure, or every later caller would inherit it.
+    const entry = {at: Date.now(), promise, user: connector.user};
+    calendarListCache = entry;
+    promise.catch(() => {
+      if (calendarListCache === entry) {
+        calendarListCache = null;
+      }
+    });
+  }
+  return promise;
+}
+
+/**
+ * Forgets the cached calendar list, so the next read asks Google again.
+ *
+ * @returns {void}
+ */
+function forgetCalendarList() {
+  calendarListCache = null;
+}
+
+/**
+ * One calendar's events for a request, paged until it is satisfied.
+ * <p>
+ * <b>maxResults is a page size, never a result count</b>: "The number of
+ * events in the resulting page may be less than this value, or none at all,
+ * even if there are more events matching the query" (discovery document,
+ * revision 20260826). singleEvents expands recurrences, so the server cuts a
+ * page short exactly where an open-ended read is likeliest.
+ * <p>
+ * Hence two bounds, neither droppable: a request with an end date pages to
+ * exhaustion, since every event in the period is part of the answer; one with
+ * a wanted count pages until it holds that many. Stopping at the first page
+ * would drop a busy calendar's tail in the first case and any calendar's head
+ * in the second.
+ *
+ * @param {Object} connector Google Connector SPI
+ * @param {Object} calendar the mapped calendar being read
+ * @param {Object} request what to read — {timeMin, timeMax, wanted}
+ * @param {String} pageToken token of the page to fetch, none for the first
+ * @param {Array} accumulated events of the pages already fetched
+ * @param {Number} page which page this is, counted from 1, for the cap
+ * @returns {Promise} a promise with that calendar's mapped events
+ */
+function retrieveCalendarEvents(connector, calendar, request, pageToken, accumulated, page = 1) {
+  const options = {
+    'calendarId': calendar.id,
+    'timeMin': request.timeMin,
+    'singleEvents': true,
+    'orderBy': 'startTime',
+    'maxResults': request.wanted || EVENTS_PAGE_SIZE,
+  };
+  // Left out entirely when the caller bounds by count: "the default is not to
+  // filter by start time", which is what makes the read horizonless.
+  if (request.timeMax) {
+    options.timeMax = request.timeMax;
+  }
+  if (pageToken) {
+    options.pageToken = pageToken;
+  }
+  return connector.gapi.client.calendar.events.list(options)
+    .then(response => {
+      const result = response.result || {};
+      const events = (accumulated || []).concat((result.items || []).map(event => mapGoogleEvent(event, calendar)));
+      const satisfied = request.wanted && events.length >= request.wanted;
+      // Only a count-bounded read is capped: truncating a windowed one would
+      // drop events inside the period asked for. A long windowed read still
+      // says so, or it is invisible but for a slow tab.
+      const exhausted = request.wanted && page >= MAX_EVENT_PAGES;
+      // Once, on the page that reaches the threshold: a windowed read carries
+      // on past it and one line is the signal, not a page each.
+      if (result.nextPageToken && !satisfied && page === MAX_EVENT_PAGES) {
+        if (exhausted) {
+          console.error(`stopped reading Google calendar ${calendar.id} after ${MAX_EVENT_PAGES} pages holding ${events.length} of the ${request.wanted} events asked for`);
+        } else {
+          // Long, not wrong: this read carries on to exhaustion and its answer
+          // is complete, so it is not an incident.
+          console.warn(`still reading Google calendar ${calendar.id} after ${page} pages holding ${events.length} events of the requested period`);
+        }
+      }
+      return result.nextPageToken && !satisfied && !exhausted
+        ? retrieveCalendarEvents(connector, calendar, request, result.nextPageToken, events, page + 1)
+        : events;
     });
 }
 
@@ -342,35 +774,26 @@ function retrieveCalendarList(connector, pageToken, accumulated) {
  *
  * @param {Object}
  *          connector Google Connector SPI
- * @param {Date}
- *          periodStartDate Start date of period of events to retrieve
- * @param {Date}
- *          periodEndDate End date of period of events to retrieve
+ * @param {Object}
+ *          request what to read — {timeMin, timeMax, wanted}
  * @returns {Promise} a promise with list of Google events
  */
-function retrieveEvents(connector, periodStartDate, periodEndDate) {
+function retrieveEvents(connector, request) {
   return retrieveCalendarList(connector)
     .then(entries => entries.map(mapCalendarListEntry))
     .then(calendars => Promise.all(calendars.map(calendar =>
-      connector.gapi.client.calendar.events.list({
-        'calendarId': calendar.id,
-        'timeMin': periodStartDate,
-        'timeMax': periodEndDate,
-        'singleEvents': true,
-        'orderBy': 'startTime'
-      }).then(events => (events.result.items || []).map(event => mapGoogleEvent(event, calendar)))
+      retrieveCalendarEvents(connector, calendar, request)
         .catch(error => {
-          if (error.status === 403 || error.status === 401) {
+          if (isAuthenticationFailure(error)) {
             throw error;
           }
           console.error(`cannot retrieve the events of Google calendar ${calendar.id}`, error);
           return [];
         })
     )))
-    .then(eventLists => {
-      connector.loadingCallback(connector, false);
-      return mergeEventLists(eventLists);
-    });
+    // The loading flag stays with readEvents for all three attempts: lowering
+    // it from a failed one told the page the read was over mid-retry.
+    .then(eventLists => mergeEventLists(eventLists));
 }
 
 function deleteCookie(name) {
@@ -445,6 +868,11 @@ function checkUserStatus(connector) {
       connector.isSignedIn = true;
       connector.canPush = connector.cientOauth.hasGrantedAllScopes(token, connector.SCOPE_WRITE);
     }
+  // Holding no token is the ordinary state of anyone who has not connected
+  // Google, and this runs at init for all of them: without the catch the
+  // browser reported an uncaught promise on every page load.
+  }).catch(() => {
+    connector.isSignedIn = false;
   });
 }
 /**
@@ -490,6 +918,10 @@ function initGoogleConnector(connector) {
           scope: connector.SCOPE_WRITE,
           ux_mode: 'popup',
           error_callback: (error) => {
+            // The other way an authorize() started by requestCode() can end;
+            // until it rejected here connect() never settled. Translated on
+            // the way out — see consentFailure().
+            failPendingAuthorization(connector, error);
             connector.loadingCallback(connector, false);
             connector.connectionStatusChangedCallback(connector, false, error);
           }
