@@ -195,6 +195,10 @@ export default {
        * the request id per requestCode() and overwrites the window handle, so
        * a second one silently strands the first whatever we do with the
        * callback — it would receive neither the consent nor a popup_closed.
+       * <p>
+       * It guards itself: it is also reached from a stored-token rejection,
+       * a later microtask the executor's try no longer covers, so a throw
+       * there settled nothing and kept the slot taken for good.
        *
        * @returns {void}
        */
@@ -203,17 +207,26 @@ export default {
           refuse(new Error('A Google consent popup is already open'));
           return;
         }
-        this.pendingAuthorization = slot;
-        this.codeClient.callback = (response) => {
-          if (!response?.code) {
-            settle(reject, new Error('Google consent was not granted'));
-            return;
-          }
-          return requestToken(response.code, response.scope, window.location.origin)
-            .then(accept)
-            .catch(refuse);
-        };
-        this.codeClient.requestCode();
+        if (!this.codeClient) {
+          refuse(new Error('The Google SDK is not ready yet'));
+          return;
+        }
+        try {
+          this.pendingAuthorization = slot;
+          this.codeClient.callback = (response) => {
+            if (!response?.code) {
+              settle(reject, new Error('Google consent was not granted'));
+              return;
+            }
+            return requestToken(response.code, response.scope, window.location.origin)
+              .then(accept)
+              .catch(refuse);
+          };
+          this.codeClient.requestCode();
+        } catch (err) {
+          // Still ours, so settling releases the slot too.
+          refuse(err);
+        }
       };
       try {
         if (refresh) {
@@ -246,18 +259,49 @@ export default {
       }
     });
   },
+  /**
+   * Signs the user in with Google's sign-in prompt.
+   * <p>
+   * Settles on the moment <em>type</em>, never on one reason string: the
+   * prompt reports a display moment, then exactly one of skipped or
+   * dismissed, and a reason only belongs to its own type —
+   * getDismissedReason() is undefined on a skip, and user_cancel is a skip.
+   * Testing reasons alone left a closed prompt settling nothing, so connect()
+   * never settled (EXO-90496).
+   * <p>
+   * Only a displayed prompt is not final: the user is still choosing.
+   *
+   * @returns {Promise} resolves once Google returned a credential, rejects
+   *          otherwise — marked as a dismissal when the user backed out, so
+   *          closing the prompt is not reported as a failure
+   */
   authenticate() {
     return new Promise((resolve, reject) => {
       deleteCookie('g_state');
+      const fail = (error, reason) => {
+        this.loadingCallback(this, false);
+        this.connectionStatusChangedCallback(this, false, reason);
+        reject(error);
+      };
       try {
         this.identity.prompt(notification => {
-          if (notification.getDismissedReason() === 'credential_returned') {
-            resolve();
-          } else
-          if (notification.getDismissedReason() === 'user_cancel') {
-            this.loadingCallback(this, false);
-            this.connectionStatusChangedCallback(this, false, 'user_cancel');
-            resolve();
+          if (notification.isDismissedMoment()) {
+            const reason = notification.getDismissedReason();
+            if (reason === 'credential_returned') {
+              resolve();
+            } else {
+              fail(new Error(`Google sign-in was dismissed: ${reason}`), reason);
+            }
+          } else if (notification.isSkippedMoment()) {
+            const reason = notification.getSkippedReason();
+            if (reason === 'issuing_failed') {
+              fail(new Error('Google could not issue a credential'), reason);
+            } else {
+              fail(signInDismissed(reason), reason);
+            }
+          } else if (notification.isNotDisplayed()) {
+            const reason = notification.getNotDisplayedReason();
+            fail(new Error(`Google sign-in could not be displayed: ${reason}`), reason);
           }
         });
       } catch (err) {
@@ -333,7 +377,8 @@ export default {
    *        offset, as $agendaUtils.toRFC3339(date, false, true) produces
    * @param {String} periodEndDate the same, for the end of the period
    * @returns {Promise} resolves with the events, rejects when the account
-   *          could not be read
+   *          could not be read; resolves with null, not a list, while the
+   *          Calendar API is not loaded yet — nothing was read
    */
   getEvents(periodStartDate, periodEndDate) {
     return readEvents(this, {timeMin: periodStartDate, timeMax: periodEndDate});
@@ -370,7 +415,8 @@ export default {
    * @param {Number} count how many events the caller can show, at least 1
    * @returns {Promise} resolves with enough events to fill a list of count
    *          per calendar, merged; rejects on a missing or non-positive
-   *          count, or when the account could not be read
+   *          count, or when the account could not be read; resolves with
+   *          null, not a list, while the Calendar API is not loaded yet
    */
   getUpcomingEvents(periodStartDate, count) {
     if (!(count > 0)) {
@@ -389,9 +435,10 @@ export default {
    * the same id the fetched events are tagged with, which is what makes the
    * left panel's per-calendar checkboxes actually filter the grid.
    *
-   * An expired token is renewed once, the same way getEvents does it; any
-   * other failure is the caller's to handle — agenda logs and drops the one
-   * connector rather than emptying its whole section.
+   * A refused token is renewed the same way getEvents does it — the stored
+   * token, then a refreshed one; any other failure is the caller's to
+   * handle — agenda logs and drops the one connector rather than emptying
+   * its whole section.
    *
    * @returns {Promise} resolves with one {id, name, color, readOnly} per
    *          calendar, or an empty list when the API is not ready
@@ -400,12 +447,19 @@ export default {
     if (!this.gapi || !this.gapi.client || !this.gapi.client.calendar) {
       return Promise.resolve([]);
     }
+    const reread = () => retrieveCalendarList(this, true);
     return retrieveCalendarList(this)
       .catch(error => {
         if (!isAuthenticationFailure(error)) {
           throw error;
         }
-        return this.authorize().then(() => retrieveCalendarList(this, true));
+        return this.authorize().then(reread);
+      })
+      .catch(error => {
+        if (!isAuthenticationFailure(error)) {
+          throw error;
+        }
+        return this.authorize(true).then(reread);
       })
       .then(entries => entries.map(mapCalendarListEntry));
   },
@@ -526,6 +580,21 @@ function consentFailure(error) {
   if (type === CONSENT_DISMISSED_TYPE) {
     failure.error = CONSENT_DISMISSED_LEGACY_CODE;
   }
+  return failure;
+}
+
+/**
+ * The sign-in prompt closed without a credential, marked the way agenda
+ * stays quiet about (see consentFailure()). Any skip but issuing_failed is
+ * the user leaving: with FedCM a closed dialog is a skip whose reason says
+ * nothing, since the browser hides why on purpose.
+ *
+ * @param {String} reason the skip reason Identity Services gave
+ * @returns {Error} the rejection, marked as a dismissal
+ */
+function signInDismissed(reason) {
+  const failure = new Error(`Google sign-in was closed: ${reason}`);
+  failure.error = CONSENT_DISMISSED_LEGACY_CODE;
   return failure;
 }
 
