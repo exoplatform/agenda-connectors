@@ -513,7 +513,8 @@ export default {
  * @param {Object} connector Google Connector SPI
  * @param {Object} request what to read — {timeMin, timeMax, wanted}
  * @returns {Promise} resolves with the mapped events, rejects when the
- *          account could not be read
+ *          account could not be read; resolves with null while the
+ *          Calendar API is not loaded yet
  */
 function readEvents(connector, request) {
   if (!connector.gapi?.client?.calendar) {
