@@ -508,8 +508,17 @@ function buildConnectorEvent(event) {
     },
     isCancelled: event.status === 'CANCELLED',
     isAllDay: !!event.allDay,
+    // The visio link rides in the location when the event names no place, the
+    // same fallback the Google connector applies: Graph's onlineMeetingUrl is
+    // read-only and written by Outlook for its own providers, so no Graph
+    // field marks an external meeting URL as the join link. The location is
+    // where we put it; an anchor in the HTML body was considered and declined
+    // (EXO-90015). Without it the copy in Outlook carried no way back to the
+    // meeting.
     location: {
-      displayName: event.location || '',
+      displayName: event.location
+        || (event.conferences && event.conferences.length && event.conferences[0].url)
+        || '',
     },
   };
 
