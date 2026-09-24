@@ -462,7 +462,7 @@ export default {
     if (!this.gapi || !this.gapi.client || !this.gapi.client.calendar) {
       return Promise.resolve([]);
     }
-    const reread = () => retrieveCalendarList(this, true).then(entries => entries.map(mapCalendarListEntry));
+    const reread = () => retrieveReadableCalendars(this, true);
     return retrieveReadableCalendars(this)
       .catch(error => {
         if (!isAuthenticationFailure(error)) {
@@ -795,24 +795,6 @@ function retrieveCalendarEvents(connector, calendar, request, pageToken, accumul
 }
 
 /**
- * The account's events over the period, gathered from every calendar of the
- * account rather than from the primary one alone. Each event is tagged with
- * the calendar it came from and carries that calendar's real colour — the
- * former single-calendar implementation hardcoded '#FFFFFF', a white event
- * on the white grid.
- *
- * One calendar that fails must not blank the whole agenda: its failure is
- * logged and it contributes no events, while the others still answer. An
- * authentication failure is rethrown instead, because it concerns every
- * calendar and the caller knows how to renew the token.
- *
- * @param {Object}
- *          connector Google Connector SPI
- * @param {Object}
- *          request what to read — {timeMin, timeMax, wanted}
- * @returns {Promise} a promise with list of Google events
- */
-/**
  * The account's calendars, or its primary one alone when the granted token
  * predates the calendar-list scope.
  * <p>
@@ -823,14 +805,21 @@ function retrieveCalendarEvents(connector, calendar, request, pageToken, accumul
  * only the scope they already hold, and is the difference between a degraded
  * agenda and an empty one. Reconnecting restores every calendar.
  *
+ * Every attempt of a retrying caller must come back through here, the
+ * retries included: a scope refusal is not an authentication failure, so a
+ * retry that called the listing directly would reject instead of falling
+ * back, and the left panel would lose the account whose events the grid is
+ * showing.
+ *
  * @param {Object} connector Google Connector SPI
+ * @param {Boolean} force re-read the listing instead of serving the cache
  * @returns {Promise} a promise with the mapped calendars
  */
-function retrieveReadableCalendars(connector) {
+function retrieveReadableCalendars(connector, force) {
   if (connector.calendarListScopeMissing) {
     return Promise.resolve(primaryCalendarOnly(connector));
   }
-  return retrieveCalendarList(connector)
+  return retrieveCalendarList(connector, force)
     .then(entries => entries.map(mapCalendarListEntry))
     .catch(error => {
       if (!isScopeFailure(error)) {
@@ -856,12 +845,35 @@ function primaryCalendarOnly(connector) {
     console.warn(`the Google account ${connector.user} was connected before the calendar-list scope was requested: only its primary calendar is read until it is reconnected`);
   }
   return [mapCalendarListEntry({
-    id: PUSH_CALENDAR_ID,
+    // The listing identifies the primary calendar by the account's email, and
+    // events.list accepts it as a calendarId just as it accepts 'primary'.
+    // Using the alias here would give the same calendar a different id once
+    // the user reconnects, losing whatever agenda keyed on it — the left
+    // panel's per-calendar checkboxes among them.
+    id: connector.user || PUSH_CALENDAR_ID,
     summary: connector.user || PUSH_CALENDAR_ID,
     accessRole: 'owner',
   })];
 }
 
+/**
+ * The account's events over the period, gathered from every calendar of the
+ * account rather than from the primary one alone. Each event is tagged with
+ * the calendar it came from and carries that calendar's real colour — the
+ * former single-calendar implementation hardcoded '#FFFFFF', a white event
+ * on the white grid.
+ *
+ * One calendar that fails must not blank the whole agenda: its failure is
+ * logged and it contributes no events, while the others still answer. An
+ * authentication failure is rethrown instead, because it concerns every
+ * calendar and the caller knows how to renew the token.
+ *
+ * @param {Object}
+ *          connector Google Connector SPI
+ * @param {Object}
+ *          request what to read — {timeMin, timeMax, wanted}
+ * @returns {Promise} a promise with list of Google events
+ */
 function retrieveEvents(connector, request) {
   return retrieveReadableCalendars(connector)
     .then(calendars => Promise.all(calendars.map(calendar =>
