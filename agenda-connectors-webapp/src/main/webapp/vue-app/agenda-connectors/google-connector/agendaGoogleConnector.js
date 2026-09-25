@@ -879,7 +879,14 @@ function retrieveEvents(connector, request) {
     .then(calendars => Promise.all(calendars.map(calendar =>
       retrieveCalendarEvents(connector, calendar, request)
         .catch(error => {
-          if (isAuthenticationFailure(error)) {
+          // A scope refusal is rethrown for the same reason an authentication
+          // failure is: it concerns the whole account, not this one calendar.
+          // Consent shows a checkbox per scope as soon as two are asked for,
+          // so a user can keep the calendar-list scope and drop the events
+          // one — every calendar then lists and none of them reads. Swallowed
+          // here, that grant would show a connected account, all its calendars
+          // and no events, with nothing for agenda to report.
+          if (isAuthenticationFailure(error) || isScopeFailure(error)) {
             throw error;
           }
           console.error(`cannot retrieve the events of Google calendar ${calendar.id}`, error);
