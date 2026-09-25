@@ -113,6 +113,16 @@ export default {
   CLIENT_ID: null,
   DISCOVERY_DOCS: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
   SCOPE_WRITE: 'https://www.googleapis.com/auth/calendar.events',
+  /**
+   * Listing the account's calendars needs its own scope: calendarList.list
+   * accepts calendar, calendar.calendarlist[.readonly] and calendar.readonly
+   * — never calendar.events (discovery document, revision 20260826). Reading
+   * every calendar was added without it, so the call 403s with
+   * ACCESS_TOKEN_SCOPE_INSUFFICIENT and, being the first call of the read,
+   * takes every event down with it. Read-only: the connector lists calendars,
+   * it never creates or deletes one.
+   */
+  SCOPE_CALENDAR_LIST: 'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
   canConnect: true,
   canPush: false,
   canListCalendars: true,
@@ -175,6 +185,11 @@ export default {
         this.gapi.client.setToken(tokenResponse);
         if (this.cientOauth) {
           this.canPush = this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_WRITE);
+          // Whether the calendars can be listed is a property of the grant,
+          // not something to discover from a refused call: reading it here
+          // spares a 403 per component that asks for calendars, and clears
+          // itself the moment the user reconnects with the wider consent.
+          this.calendarListScopeMissing = !this.cientOauth.hasGrantedAllScopes(tokenResponse, this.SCOPE_CALENDAR_LIST);
         }
         settle(resolve, tokenResponse);
       };
@@ -447,8 +462,8 @@ export default {
     if (!this.gapi || !this.gapi.client || !this.gapi.client.calendar) {
       return Promise.resolve([]);
     }
-    const reread = () => retrieveCalendarList(this, true);
-    return retrieveCalendarList(this)
+    const reread = () => retrieveReadableCalendars(this, true);
+    return retrieveReadableCalendars(this)
       .catch(error => {
         if (!isAuthenticationFailure(error)) {
           throw error;
@@ -460,8 +475,7 @@ export default {
           throw error;
         }
         return this.authorize(true).then(reread);
-      })
-      .then(entries => entries.map(mapCalendarListEntry));
+      });
   },
   deleteEvent(event, connectorRecurringEventId) {
     return this.saveEvent(event, connectorRecurringEventId, true);
@@ -608,7 +622,27 @@ function signInDismissed(reason) {
  * @returns {Boolean} true when the token is what was refused
  */
 function isAuthenticationFailure(error) {
-  return !!error && (error.status === 401 || error.status === 403);
+  return !!error && (error.status === 401 || error.status === 403) && !isScopeFailure(error);
+}
+
+/**
+ * Whether Google refused the call for lack of a scope rather than for a stale
+ * token. Both answer 403, and only one of them a new token can fix: a scope is
+ * granted by the user at consent, so re-authorizing with the same grant
+ * returns the same token and the same refusal — which is why this must not be
+ * retried, and why the caller falls back instead.
+ *
+ * @param {Object} error the rejection to classify
+ * @returns {Boolean} true when a scope, not the token, is what is missing
+ */
+function isScopeFailure(error) {
+  const details = error && error.result && error.result.error || {};
+  // Never on PERMISSION_DENIED alone: Google answers that to a call carrying
+  // no credentials at all ("Method doesn't allow unregistered callers") just
+  // as it does to one short of a scope, and the first is exactly what a new
+  // token fixes. Only ACCESS_TOKEN_SCOPE_INSUFFICIENT names the grant.
+  return (details.details || []).some(d => d.reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT')
+    || /insufficient authentication scopes/i.test(details.message || '');
 }
 
 /**
@@ -761,6 +795,68 @@ function retrieveCalendarEvents(connector, calendar, request, pageToken, accumul
 }
 
 /**
+ * The account's calendars, or its primary one alone when the granted token
+ * predates the calendar-list scope.
+ * <p>
+ * Every account connected before that scope was requested holds a
+ * calendar.events-only token, and Google does not extend an existing grant —
+ * those users would see nothing at all until they reconnected. Reading the
+ * primary calendar is what the connector did before it read them all, needs
+ * only the scope they already hold, and is the difference between a degraded
+ * agenda and an empty one. Reconnecting restores every calendar.
+ *
+ * Every attempt of a retrying caller must come back through here, the
+ * retries included: a scope refusal is not an authentication failure, so a
+ * retry that called the listing directly would reject instead of falling
+ * back, and the left panel would lose the account whose events the grid is
+ * showing.
+ *
+ * @param {Object} connector Google Connector SPI
+ * @param {Boolean} force re-read the listing instead of serving the cache
+ * @returns {Promise} a promise with the mapped calendars
+ */
+function retrieveReadableCalendars(connector, force) {
+  if (connector.calendarListScopeMissing) {
+    return Promise.resolve(primaryCalendarOnly(connector));
+  }
+  return retrieveCalendarList(connector, force)
+    .then(entries => entries.map(mapCalendarListEntry))
+    .catch(error => {
+      if (!isScopeFailure(error)) {
+        throw error;
+      }
+      connector.calendarListScopeMissing = true;
+      return primaryCalendarOnly(connector);
+    });
+}
+
+/**
+ * The account's primary calendar alone, as the caller would have received it
+ * from the listing. Said once per connector rather than once per component
+ * that asks: several of them read calendars on one page, and the reason is
+ * the same for all of them.
+ *
+ * @param {Object} connector Google Connector SPI
+ * @returns {Array} a single mapped calendar
+ */
+function primaryCalendarOnly(connector) {
+  if (!connector.calendarListScopeAnnounced) {
+    connector.calendarListScopeAnnounced = true;
+    console.warn(`the Google account ${connector.user} was connected before the calendar-list scope was requested: only its primary calendar is read until it is reconnected`);
+  }
+  return [mapCalendarListEntry({
+    // The listing identifies the primary calendar by the account's email, and
+    // events.list accepts it as a calendarId just as it accepts 'primary'.
+    // Using the alias here would give the same calendar a different id once
+    // the user reconnects, losing whatever agenda keyed on it — the left
+    // panel's per-calendar checkboxes among them.
+    id: connector.user || PUSH_CALENDAR_ID,
+    summary: connector.user || PUSH_CALENDAR_ID,
+    accessRole: 'owner',
+  })];
+}
+
+/**
  * The account's events over the period, gathered from every calendar of the
  * account rather than from the primary one alone. Each event is tagged with
  * the calendar it came from and carries that calendar's real colour — the
@@ -779,12 +875,18 @@ function retrieveCalendarEvents(connector, calendar, request, pageToken, accumul
  * @returns {Promise} a promise with list of Google events
  */
 function retrieveEvents(connector, request) {
-  return retrieveCalendarList(connector)
-    .then(entries => entries.map(mapCalendarListEntry))
+  return retrieveReadableCalendars(connector)
     .then(calendars => Promise.all(calendars.map(calendar =>
       retrieveCalendarEvents(connector, calendar, request)
         .catch(error => {
-          if (isAuthenticationFailure(error)) {
+          // A scope refusal is rethrown for the same reason an authentication
+          // failure is: it concerns the whole account, not this one calendar.
+          // Consent shows a checkbox per scope as soon as two are asked for,
+          // so a user can keep the calendar-list scope and drop the events
+          // one — every calendar then lists and none of them reads. Swallowed
+          // here, that grant would show a connected account, all its calendars
+          // and no events, with nothing for agenda to report.
+          if (isAuthenticationFailure(error) || isScopeFailure(error)) {
             throw error;
           }
           console.error(`cannot retrieve the events of Google calendar ${calendar.id}`, error);
@@ -867,6 +969,7 @@ function checkUserStatus(connector) {
     if (connector.user && token?.access_token) {
       connector.isSignedIn = true;
       connector.canPush = connector.cientOauth.hasGrantedAllScopes(token, connector.SCOPE_WRITE);
+      connector.calendarListScopeMissing = !connector.cientOauth.hasGrantedAllScopes(token, connector.SCOPE_CALENDAR_LIST);
     }
   // Holding no token is the ordinary state of anyone who has not connected
   // Google, and this runs at init for all of them: without the catch the
@@ -915,7 +1018,7 @@ function initGoogleConnector(connector) {
         defineSdkHandle(connector, 'cientOauth', google.accounts.oauth2);
         defineSdkHandle(connector, 'codeClient', connector.cientOauth.initCodeClient({
           client_id: connector.CLIENT_ID,
-          scope: connector.SCOPE_WRITE,
+          scope: `${connector.SCOPE_WRITE} ${connector.SCOPE_CALENDAR_LIST}`,
           ux_mode: 'popup',
           error_callback: (error) => {
             // The other way an authorize() started by requestCode() can end;
